@@ -279,13 +279,11 @@ const workspaceLinkedManifestCache = new Map<string, VirtualManifest | undefined
  * Resolve the package version selected for a declaring workspace instead of an
  * unrelated historical version that still occupies the shared virtual store.
  * @param name - external package identity.
- * @param manifests - workspace manifests already loaded by the caller, so one
- *   load serves every dependency instead of a full re-read per name.
  * @returns the first current workspace link for that package, when installed.
  */
-function workspaceLinkedManifest(name: string, manifests: Map<string, Manifest>): VirtualManifest | undefined {
+function workspaceLinkedManifest(name: string): VirtualManifest | undefined {
   if (workspaceLinkedManifestCache.has(name)) return workspaceLinkedManifestCache.get(name)
-  for (const [path, manifest] of manifests) {
+  for (const [path, manifest] of loadWorkspaceManifests().manifests) {
     if (!ALL_KINDS.some(kind => name in (manifest[kind] ?? {}))) continue
     const linked = resolve(root, dirname(path), 'node_modules', name, 'package.json')
     if (!existsSync(linked)) continue
@@ -298,8 +296,8 @@ function workspaceLinkedManifest(name: string, manifests: Map<string, Manifest>)
 }
 
 /** Resolve one installed external package manifest from either pnpm store. */
-function installedManifest(name: string, manifests: Map<string, Manifest>, expectedVersion?: string): VirtualManifest | undefined {
-  const linked = workspaceLinkedManifest(name, manifests)
+function installedManifest(name: string, expectedVersion?: string): VirtualManifest | undefined {
+  const linked = workspaceLinkedManifest(name)
   if (linked !== undefined && (expectedVersion === undefined || linked.version === expectedVersion)) return linked
   let manifest: (Manifest & { license?: string; repository?: string | { url?: string }; homepage?: string }) | undefined
   // Workspace-local link farms can expose a dependency that is not linked at
@@ -322,9 +320,9 @@ function installedManifest(name: string, manifests: Map<string, Manifest>, expec
 }
 
 /** License and repository URL for an installed external package, from the pnpm store. */
-function installedMetadata(name: string, manifests: Map<string, Manifest>): { license: string; repo: string } {
+function installedMetadata(name: string): { license: string; repo: string } {
   const override = OVERRIDES[name]
-  const manifest = installedManifest(name, manifests)
+  const manifest = installedManifest(name)
   const license = override?.license ?? manifest?.license
   const rawRepo = typeof manifest?.repository === 'string' ? manifest.repository : manifest?.repository?.url ?? manifest?.homepage
   const repo = override?.repo ?? normalizeRepo(rawRepo)
@@ -334,8 +332,8 @@ function installedMetadata(name: string, manifests: Map<string, Manifest>): { li
   return { license, repo }
 }
 
-function collectClaudeDistribution(manifests: Map<string, Manifest>): ClaudeDistribution {
-  const manifest = installedManifest(CLAUDE_AGENT_SDK_PACKAGE, manifests)
+function collectClaudeDistribution(): ClaudeDistribution {
+  const manifest = installedManifest(CLAUDE_AGENT_SDK_PACKAGE)
   if (manifest === undefined) {
     throw new Error(
       `gen-third-party-notices: cannot resolve ${CLAUDE_AGENT_SDK_PACKAGE}; run \`pnpm install\`.`,
@@ -344,7 +342,7 @@ function collectClaudeDistribution(manifests: Map<string, Manifest>): ClaudeDist
   const distribution = claudeDistributionFromManifest(manifest)
   let installedPayloads = 0
   for (const payload of distribution.payloads) {
-    const installed = installedManifest(payload.name, manifests, payload.version)
+    const installed = installedManifest(payload.name, payload.version)
     if (installed === undefined) continue
     installedPayloads += 1
     if (
@@ -385,11 +383,12 @@ function normalizeRepo(raw: string | undefined): string | undefined {
  * by tooling, test infrastructure, the website, or the demo leaves — whatever
  * the declaring section is called — is development-only.
  */
-function collectNpmDeps(manifests: Map<string, Manifest>, names: Set<string>): ExternalDep[] {
+function collectNpmDeps(): ExternalDep[] {
+  const { manifests, names } = loadWorkspaceManifests()
   return [...tierExternalDeps(manifests, names)]
     .filter(([name]) => !FIRST_PARTY.has(name))
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, runtime]) => ({ name, ...installedMetadata(name, manifests), runtime }))
+    .map(([name, runtime]) => ({ name, ...installedMetadata(name), runtime }))
 }
 
 /**
@@ -693,11 +692,7 @@ ${rows.join('\n')}
  */
 export function render(): string {
   verifyBuildTimePins()
-  // The linked-manifest cache is keyed by name only, so it must not outlive
-  // the manifests map it was resolved from; render() owns that single load.
-  workspaceLinkedManifestCache.clear()
-  const { manifests, names } = loadWorkspaceManifests()
-  const npm = collectNpmDeps(manifests, names)
+  const npm = collectNpmDeps()
   const runtimeDeps = npm.filter(dep => dep.runtime)
   const devDeps = npm.filter(dep => !dep.runtime)
   const vendored = collectVendored()
@@ -706,7 +701,7 @@ export function render(): string {
   const claudeDistribution = runtimeDeps.some(
     dep => dep.name === CLAUDE_AGENT_SDK_PACKAGE,
   )
-    ? collectClaudeDistribution(manifests)
+    ? collectClaudeDistribution()
     : undefined
   const nonPermissiveDev = devDeps.filter(dep => !isPermissive(dep.license))
   // A copyleft license reaching a shipped surface is a distribution decision,

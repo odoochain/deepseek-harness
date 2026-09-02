@@ -145,5 +145,3 @@ kind: "package-reference"
 无。
 
 </details>
-
-**运行时不变式：** 不发布伴生入口。tool adapter 不持有独立持久状态；filesystem mutation 关系属于 provider 与 policy 插件。

@@ -10,8 +10,6 @@ import {
   decodeSeqRanges,
   decodeStorageRecord,
   packChunkRuns,
-  SessionLogOffset,
-  SessionSeq,
   type SessionEvent,
 } from '@deepseek-ai/dsh-session'
 import { redactSessionSnapshotIds } from './identity.ts'
@@ -387,16 +385,16 @@ function repackSessionSnapshot(rawLog: string): string {
   const lines = rawLog.split('\n').filter(line => line.trim().length > 0)
   const header = lines.shift() as string
 
-  let nextSeq = SessionLogOffset(0)
+  let nextSeq = 0
   const events = lines.flatMap((line) => {
     const record = JSON.parse(line) as Record<string, unknown>
     if (isPackedFixtureRow(record)) {
       const decoded = decodeStorageRecord({ ...record, seq0: nextSeq, time0: 0 })
-      nextSeq = SessionLogOffset(nextSeq + decoded.length)
+      nextSeq += decoded.length
       return decoded
     }
-    const event = { ...record, seq: SessionSeq(nextSeq), time: 0 } as SessionEvent
-    nextSeq = SessionLogOffset(nextSeq + 1)
+    const event = { ...record, seq: nextSeq, time: 0 } as SessionEvent
+    nextSeq += 1
     return [event]
   })
   const body = packChunkRuns(events).map((stored) => {

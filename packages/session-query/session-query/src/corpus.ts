@@ -1,13 +1,7 @@
 /** Live/persisted logical-corpus resolution for session-query. */
 
 import type { Context, Fiber } from '@deepseek-ai/cordis'
-import type {
-  Session,
-  SessionEvent,
-  SessionHeader,
-  SessionId,
-  SessionLogOffset,
-} from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type SessionPersistence from '@deepseek-ai/dsh-session-persistence'
 import type { SessionRecord } from './types.ts'
 import { SessionQueryError } from './config.ts'
@@ -17,8 +11,6 @@ import { assertSessionHeadersCompatible } from './sources.ts'
 export interface LogicalSession {
   /** Cloned source header. */
   header: SessionHeader
-  /** Exact fork-inherited event count paired with {@link header}. */
-  inheritedEventCount: SessionLogOffset
   /** Cloned raw event log. */
   events: SessionEvent[]
 }
@@ -27,8 +19,6 @@ export interface LogicalSession {
 export interface LogicalSessionSource {
   /** Header selected with `events`; callers must clone retained output. */
   readonly header: SessionHeader
-  /** Exact fork-inherited event count paired with {@link header}. */
-  readonly inheritedEventCount: SessionLogOffset
   /** Raw events selected with `header`; valid only for the projection call. */
   readonly events: readonly SessionEvent[]
 }
@@ -119,7 +109,6 @@ export class SessionCorpus {
     assertSessionHeadersCompatible(loaded.meta, listed)
     const snapshot = {
       header: structuredClone(loaded.meta),
-      inheritedEventCount: loaded.inheritedEventCount,
       events: loaded.events.map(event => structuredClone(event)),
     }
     signal?.throwIfAborted()
@@ -196,7 +185,6 @@ export class SessionCorpus {
         assertSessionHeadersCompatible(loaded.meta, listed)
         resolved.set(sessionId, projectSource(sessionId, {
           header: loaded.meta,
-          inheritedEventCount: loaded.inheritedEventCount,
           events: loaded.events,
         }, project, signal))
       } catch (error: unknown) {
@@ -251,11 +239,7 @@ function projectSource<Value>(
 }
 
 function sourceLive(session: Session): LogicalSessionSource {
-  return {
-    header: session.header,
-    inheritedEventCount: session.inheritedEventCount,
-    events: session.snapshotEvents(),
-  }
+  return { header: session.header, events: session.events }
 }
 
 function orderedResults<Value>(
@@ -308,8 +292,7 @@ async function inspectPersisted(
 function snapshotLive(session: Session): LogicalSession {
   return {
     header: structuredClone(session.header),
-    inheritedEventCount: session.inheritedEventCount,
-    events: session.snapshotEvents().map(event => structuredClone(event)),
+    events: session.events.map(event => structuredClone(event)),
   }
 }
 

@@ -11,6 +11,7 @@ import type { GoalRef, GoalView } from '@deepseek-ai/dsh-goal'
 import { boundContextSummary, createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView } from '@deepseek-ai/dsh-tools'
+import { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
 import {
   completionAuthority,
   goalToolExecution,
@@ -19,7 +20,7 @@ import {
 import { renderWrapupContext } from './wrapup.ts'
 
 export const name = 'tool-goal'
-export const inject = ['agents', 'goals', 'tools', 'systemPrompt', 'sessionProjections']
+export const inject = ['agents', 'goals', 'tools', 'systemPrompt']
 
 /** Model policy and hard lower bounds for goal-state updates. */
 export interface Config {
@@ -187,7 +188,7 @@ export function apply(ctx: Context, config: Config): void {
   const resolved = resolveConfig(config)
   ctx.systemPrompt.section({
     name: 'tool:goal',
-    order: ctx.systemPrompt.getSectionOrder('TOOL_GOAL'),
+    order: FIRST_PARTY_SECTION_ORDER.TOOL_GOAL,
     text: guidance(resolved.blockedAfterConsecutiveRounds),
   })
 

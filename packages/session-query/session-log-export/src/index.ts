@@ -2,10 +2,9 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
-import { brandString } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-attachment'
 import type { CommandResult } from '@deepseek-ai/dsh-commands'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionRawArtifact } from '@deepseek-ai/dsh-session-persistence'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
@@ -111,7 +110,7 @@ async function sessionLogExportResponse(
     || (descendantsValue !== undefined && descendantsValue !== 'true' && descendantsValue !== 'false')) {
     return new Response('missing or invalid sessionId query parameter', { status: 400 })
   }
-  const sessionId = brandString<SessionId>(sessionIdValue)
+  const sessionId = SessionId(sessionIdValue)
   const deps = sessionLogExportDeps(ctx)
   if (deps.sessionQuery === undefined
     || deps.sessionPersistence === undefined

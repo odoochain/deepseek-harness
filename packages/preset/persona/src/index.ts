@@ -16,9 +16,13 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-system-prompt'
-import { PERSONA_SECTION } from '@deepseek-ai/dsh-system-prompt'
 
-export { PERSONA_SECTION }
+// Imported rather than restated: the registry declares the slot this row
+// replaces, and two hardcoded copies would drift into a preset whose persona
+// silently lands beside the deployment's instead of shadowing it.
+import { PERSONA_ORDER, PERSONA_SECTION } from '@deepseek-ai/dsh-system-prompt'
+
+export { PERSONA_ORDER, PERSONA_SECTION }
 
 /** Cordis plugin name. */
 export const name = 'persona'
@@ -56,7 +60,7 @@ export const Config: z<Config> = z.object({
 export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => ctx.systemPrompt.section({
     name: PERSONA_SECTION,
-    order: ctx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA'),
+    order: PERSONA_ORDER,
     text: config.text,
     ...(config.complete ? { complete: true } : {}),
   }), 'persona.section()')

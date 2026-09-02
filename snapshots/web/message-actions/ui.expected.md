@@ -31,11 +31,7 @@
   - img
 - button "Branch into a new conversation" [disabled]:
   - img
-- text: Available only on the last message of a completed turn
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
-- text: 7/25 {{clock}}
+- text: Available only on the last message of a completed turn 7/25 {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s
 - button "Read a.txt":
   - img
   - img
@@ -62,10 +58,7 @@
   - img
 - button "Branch into a new conversation":
   - img
-- button "Ran for {{duration}}":
-  - img
-  - text: Ran for {{duration}}
-- text: 7/25 {{clock}}
+- text: 7/25 {{clock}} Ran for {{duration}}
 - textbox "Message or run a task... / commands, @ files or sessions"
 - button "Commands":
   - img

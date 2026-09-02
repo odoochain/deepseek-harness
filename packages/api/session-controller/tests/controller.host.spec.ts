@@ -2,9 +2,8 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
-import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { describe, expect, it, vi } from 'vitest'
 import SessionController from '../src/index.ts'
 import type { ApiSessionAgentController } from '../src/agent.ts'
@@ -30,14 +29,9 @@ describe('SessionController facade', () => {
       id: sessionId,
       createdAt: 1,
       cwd: '/workspace',
-      isSeeded: false,
     }
     const events: SessionEvent[] = []
-    const inspect = vi.fn(() => Promise.resolve({
-      meta: header,
-      inheritedEventCount: SessionLogOffset(0),
-      events,
-    }))
+    const inspect = vi.fn(() => Promise.resolve({ meta: header, events }))
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
       list: () => Promise.resolve([header]),
       inspect,
@@ -50,11 +44,7 @@ describe('SessionController facade', () => {
     ctx.on('api-session/error', failure)
     ctx.on('api-session/activity', activity)
 
-    await expect(controller.inspect(sessionId)).resolves.toEqual({
-      meta: header,
-      inheritedEventCount: SessionLogOffset(0),
-      events,
-    })
+    await expect(controller.inspect(sessionId)).resolves.toEqual({ meta: header, events })
     expect(inspect).toHaveBeenCalledOnce()
 
     const session = ctx.sessions.create(sessionId, { meta: header })
@@ -71,11 +61,7 @@ describe('SessionController facade', () => {
     )
 
     await expect(controller.resolveAgent(sessionId)).resolves.toEqual({ agent })
-    await expect(controller.inspect(sessionId)).resolves.toEqual({
-      meta: header,
-      inheritedEventCount: SessionLogOffset(0),
-      events,
-    })
+    await expect(controller.inspect(sessionId)).resolves.toEqual({ meta: header, events })
     expect(inspect).toHaveBeenCalledOnce()
     ctx.emit('agent/status', { agent, status: 'running' })
     ctx.emit('agent/error', { agent, turn: 1, step: 0, error: new Error('fixture failure') })
@@ -122,15 +108,11 @@ describe('SessionController facade', () => {
       await ctx.plugin(AgentRegistry)
       const sessionId = SessionId(`background-${outcome}`)
       const header: SessionHeader = {
-        version: 0, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
+        version: 0, id: sessionId, createdAt: 1, cwd: '/workspace',
       }
       ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
         list: () => Promise.resolve([header]),
-        inspect: () => Promise.resolve({
-          meta: header,
-          inheritedEventCount: SessionLogOffset(0),
-          events: [],
-        }),
+        inspect: () => Promise.resolve({ meta: header, events: [] }),
       }) as never)
       const controller = createSessionTestController(ctx, defaults)
       const agents = (controller as unknown as { agents: ApiSessionAgentController }).agents
@@ -142,7 +124,7 @@ describe('SessionController facade', () => {
       if (outcome === 'success') resolve.mockResolvedValue({ agent: live })
       else if (outcome === 'domain-error') {
         resolve.mockResolvedValue({
-          error: new RemoteError('gateway/internal', 'activation unavailable', {}),
+          error: { code: 'internal', message: 'activation unavailable', details: {} },
         })
       } else {
         resolve.mockRejectedValue(new Error('activation crashed'))
@@ -178,15 +160,11 @@ describe('SessionController facade', () => {
     await ctx.plugin(AgentRegistry)
     const sessionId = SessionId('background-disposal')
     const header: SessionHeader = {
-      version: 0, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
+      version: 0, id: sessionId, createdAt: 1, cwd: '/workspace',
     }
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
       list: () => Promise.resolve([header]),
-      inspect: () => Promise.resolve({
-        meta: header,
-        inheritedEventCount: SessionLogOffset(0),
-        events: [],
-      }),
+      inspect: () => Promise.resolve({ meta: header, events: [] }),
     }) as never)
     const controller = createSessionTestController(ctx, defaults)
     const agents = (controller as unknown as { agents: ApiSessionAgentController }).agents

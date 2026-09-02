@@ -10,10 +10,11 @@ import {
 } from '@deepseek-ai/dsh-cordis-host-runner'
 import type { DynamicCordisReference } from '@deepseek-ai/dsh-cordis-host-runner'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { JsonValue } from '@deepseek-ai/dsh-session'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
 import { missingServices, providedServices } from './inspect.ts'
 import {
   presentDefineCall, presentInspectListCall, presentInspectQueryCall, presentInspectSelfCall, presentRunCall,
@@ -34,7 +35,7 @@ function requireAgent(exec: ToolExecution): Agent {
 export function apply(ctx: Context): void {
   ctx.systemPrompt.section({
     name: 'tool:cordis',
-    order: ctx.systemPrompt.getSectionOrder('TOOL_CORDIS'),
+    order: FIRST_PARTY_SECTION_ORDER.TOOL_CORDIS,
     text: CORDIS_SYSTEM_PROMPT,
   })
   for (const provider of hostInspectProviders(ctx)) {

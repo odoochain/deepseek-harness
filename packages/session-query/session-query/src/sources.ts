@@ -15,7 +15,7 @@ export function assertSessionHeadersCompatible(a: SessionHeader, b: SessionHeade
     || a.createdAt !== b.createdAt
     || a.cwd !== b.cwd
     || a.parentSession !== b.parentSession
-    || a.isSeeded !== b.isSeeded
+    || a.seedLength !== b.seedLength
     || (a.delegationDepth ?? 0) !== (b.delegationDepth ?? 0)
   ) {
     throw new SessionQueryError(

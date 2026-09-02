@@ -13,7 +13,6 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as HooksCodex from '@deepseek-ai/dsh-hooks-codex'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
 /**
@@ -43,7 +42,6 @@ function writeHooks(dir: string, hooks: unknown): void {
 async function harness(dir: string, adapter: MockAdapter, beforeHooks?: (ctx: Context) => void): Promise<Context> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(LocalSubprocessRuntime)
   await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
@@ -56,7 +54,7 @@ async function harness(dir: string, adapter: MockAdapter, beforeHooks?: (ctx: Co
 function waitForIdle(_ctx: Context, agent: Agent): Promise<void> {
   return agent.whenIdle()
 }
-function events(agent: Agent): readonly SessionEvent[] { return agent.session.snapshotEvents() }
+function events(agent: Agent): SessionEvent[] { return [...agent.session.events] }
 
 /** Poll `predicate` until true or the deadline passes (detached hook effects can't be awaited directly). */
 async function waitFor(predicate: () => boolean, timeout = 5000, interval = 10): Promise<void> {
@@ -184,7 +182,6 @@ describe('hooks-codex bridge', () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(LocalSubprocessRuntime)
     await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
@@ -208,7 +205,6 @@ describe('hooks-codex bridge', () => {
     writeHooks(dir, { SessionStart: [{ hooks: [{ type: 'command', command: slow }] }] })
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(LocalSubprocessRuntime)
     await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
@@ -231,12 +227,12 @@ describe('hooks-codex bridge', () => {
   it('has the namespace-plugin export shape (no stray default) so the Loader keeps name/inject/apply', () => {
     expect('default' in HooksCodex).toBe(false)
     expect(HooksCodex.name).toBe('hooks-codex')
-    expect(HooksCodex.inject).toEqual(['shell', 'sessionProjections'])
+    expect(HooksCodex.inject).toEqual(['shell'])
     const loader = Object.create(Loader.prototype) as Loader
     const unwrapped = loader.unwrapExports(HooksCodex) as Record<string, unknown>
     expect(unwrapped).toBe(HooksCodex)
     expect(unwrapped.name).toBe('hooks-codex')
-    expect(unwrapped.inject).toEqual(['shell', 'sessionProjections'])
+    expect(unwrapped.inject).toEqual(['shell'])
     expect(typeof unwrapped.apply).toBe('function')
   })
 })

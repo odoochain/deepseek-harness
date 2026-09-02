@@ -3,13 +3,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute } from 'node:path'
-import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ModelSelection } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type {} from '@deepseek-ai/dsh-agent-presets'
 import { boundContextSummary, createUserMessage, errorChain, type LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-permission-presets'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import type {} from '@deepseek-ai/dsh-workspace'
 import type { WebhookRuleId } from './brand.ts'
@@ -132,7 +131,7 @@ export async function createWebhookSession(
 
   const workspace = await ctx.workspaceRegistry.create(resolved.workspacePath)
   signal.throwIfAborted()
-  const sessionId = brandString<SessionId>(`webhook-${randomUUID()}`)
+  const sessionId = SessionId(`webhook-${randomUUID()}`)
   const handle = await ctx.agents.create({
     sessionId,
     signal,

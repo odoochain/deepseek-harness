@@ -16,8 +16,7 @@ import {
   type SpawnOptions,
 } from '@anthropic-ai/claude-agent-sdk'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { brandString } from '@deepseek-ai/dsh-brand'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import {
   settleRunResult,
   subprocessRunHandle,
@@ -579,7 +578,7 @@ export async function startClaudeCodeRun(
   })
 
   return subprocessRunHandle({
-    id: brandString<SessionId>(randomUUID()),
+    id: SessionId(randomUUID()),
     result,
     signal: request.signal,
     onAbort,

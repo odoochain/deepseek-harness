@@ -6,8 +6,7 @@ export { ConversationController, UnsupportedImageMediaTypeError } from './servic
 export type { IConversation } from './service.ts'
 export type {
   ConversationContextReader, ConversationLocation,
-  ConversationLocationData, ConversationLocationDataScope, ConversationLocationDataSource,
-  ConversationLocationDataStore,
+  ConversationLocationData, ConversationLocationDataScope, ConversationLocationDataStore,
   ConversationMatch, ConversationMatchResult, ConversationNodeContext,
   ConversationNodeDefinition, ConversationPreviousContext, ConversationPublication,
   ConversationStartMatch,

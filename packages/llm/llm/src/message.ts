@@ -1,9 +1,8 @@
 /** Message value types, identity, and immutable construction helpers. */
 
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
-import { brandString } from '@deepseek-ai/dsh-brand'
-import { deepFreeze } from '@deepseek-ai/dsh-util-values'
-import type { MessageId, ToolCallId } from './brand.ts'
+import { MessageId, type ToolCallId } from './brand.ts'
+import { deepFreeze } from './call-config.ts'
 import type { ContentBlock, ToolResultBlock } from './types.ts'
 
 /** Provider/model identity and adapter-private replay data for an assistant message. */
@@ -182,7 +181,7 @@ export function createMessage<T extends NewMessage>(
 ): T & Pick<Message, 'id'> {
   return freezeMessage({
     ...input,
-    id: brandString<MessageId>(randomUUID()),
+    id: MessageId(randomUUID()),
   })
 }
 

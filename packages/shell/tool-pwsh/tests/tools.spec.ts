@@ -22,13 +22,11 @@ import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
 import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellRunResult } from '@deepseek-ai/dsh-shell'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import * as ToolPwsh from '@deepseek-ai/dsh-tool-pwsh'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
@@ -212,11 +210,6 @@ async function setupSandboxed(withApproval = false) {
   await ctx.plugin(LocalJobRegistry)
   await ctx.plugin(ToolTasks)
   await ctx.plugin(BashEnvPlugin)
-  await ctx.plugin(SessionProjectionRegistry)
-  // The loop's turnBoundary unit (the open-turn fold) is not mounted in this
-  // bench — the loop itself is not composed. Register its open-turn fold so
-  // the approval service's turn-enclosure gate reads the seeded log shape.
-  ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   await ctx.plugin(SandboxPolicyService, {})
   await ctx.plugin(ConfiningFakeBash)
   if (withApproval) await ctx.plugin(ApprovalService)
@@ -236,39 +229,18 @@ function sandboxAgent(
   ctx?: Context,
   onAppend?: (type: string) => void,
 ): Agent {
-  const events: Array<{
-    type: string
-    seq: ReturnType<typeof SessionSeq>
-    time: number
-    data: Record<string, unknown>
-  }> = [
-    { type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } },
-  ]
-  if (mode !== undefined) {
-    events.push({ type: 'sandbox/mode', seq: SessionSeq(1), time: 1, data: { mode } })
-  }
+  const events: Array<{ type: string; data?: Record<string, unknown> }> = [{ type: 'turn/start' }]
+  if (mode !== undefined) events.push({ type: 'sandbox/mode', data: { mode } })
   const id = SessionId('sandbox-session')
   return {
     id,
     ...ctx === undefined ? {} : { ctx: ctx.plugin(() => {}).ctx },
     session: {
       id,
-      header: { version: 0, id, createdAt: 0, isSeeded: false },
-      inheritedEventCount: SessionLogOffset(0),
-      firstLiveSeq: SessionLogOffset(0),
-      get seq() { return SessionLogOffset(events.length) },
-      eventAt: (seq: ReturnType<typeof SessionSeq>) => events[seq],
-      snapshotEvents: (
-        fromSeq = SessionLogOffset(0),
-        toSeqExclusive = SessionLogOffset(events.length),
-      ) => events.slice(fromSeq, toSeqExclusive),
+      header: { version: 0, id, createdAt: 0 },
+      events,
       append: (type: string, data: Record<string, unknown>) => {
-        const event = {
-          type,
-          seq: SessionSeq(events.length),
-          time: events.length,
-          data,
-        }
+        const event = { type, data }
         events.push(event)
         onAppend?.(type)
         return event
@@ -289,15 +261,7 @@ function registerFakeAgent(ctx: Context, sessionId: string): Agent {
   const agent = {
     id,
     ctx: scopeFiber.ctx,
-    session: {
-      id,
-      header: { version: 0, id, createdAt: 0, isSeeded: false },
-      inheritedEventCount: SessionLogOffset(0),
-      firstLiveSeq: SessionLogOffset(0),
-      seq: SessionLogOffset(0),
-      eventAt: () => undefined,
-      snapshotEvents: () => [],
-    },
+    session: { id, header: { version: 0, id, createdAt: 0 }, events: [] },
   } as unknown as Agent
   ctx.agents.register(agent)
   return agent
@@ -629,10 +593,10 @@ describe('sandbox escalation through ctx.approval', () => {
     expect(prompted).not.toHaveBeenCalled()
 
     const malformed = sandboxAgent()
-    ;(malformed.session.append as unknown as (
-      type: string,
-      data: Record<string, unknown>,
-    ) => unknown)('sandbox/mode', { mode: 'unknown-mode' })
+    ;(malformed.session.events as unknown as Array<{ type: string; data: { mode: string } }>).push({
+      type: 'sandbox/mode',
+      data: { mode: 'unknown-mode' },
+    })
     expect(text(await call(ctx, 'pwsh', escalate, malformed))).toContain('not strictly wider')
   })
 

@@ -1,13 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
-import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { SettingsDocumentStore } from '../src/client/settings-document-store.ts'
 
-/** Store over a real mirror derived from the same scripted context. */
-function derivedDocumentStore(remote: object) {
-  const ctx = { remote } as never
-  return new SettingsDocumentStore(ctx, new SettingsDescribeMirror(ctx))
+/** Store over a real mirror derived from the same fake wire. */
+function derivedDocumentStore(api: object) {
+  const wire = api as never
+  return new SettingsDocumentStore(wire, new SettingsDescribeMirror(wire))
 }
 
 function response(hasDocument = false) {
@@ -19,7 +18,7 @@ function opened(): RemoteResult<{ opened: true }> {
 }
 
 function describeFailed(message: string) {
-  return { ok: false as const, error: new RemoteError('gateway/internal', message, {}) }
+  return { ok: false as const, error: { code: 'internal', message, details: {} } }
 }
 
 describe('SettingsDocumentStore', () => {
@@ -70,28 +69,42 @@ describe('SettingsDocumentStore', () => {
     const first = controller.open()
     const second = controller.open()
     expect(openDocument).toHaveBeenCalledOnce()
-    resolveOpen({ ok: false, error: new RemoteError('gateway/internal', 'no default editor', {}) })
+    resolveOpen({ ok: false, error: { code: 'internal', message: 'no default editor', details: {} } })
     await Promise.all([first, second])
     expect(controller.store.getSnapshot()).toMatchObject({
       status: 'ready', opening: false, error: 'no default editor',
     })
   })
 
-  it('recovers availability via a mirror refresh after a failed first read', async () => {
+  it('reports non-Error native failures and recovers availability via a mirror refresh', async () => {
+    let rejectOpen!: (reason?: unknown) => void
+    const controller = derivedDocumentStore({
+      settings: {
+        describe: vi.fn(() => Promise.resolve(response(true))),
+        openSettingsDocument: () => new Promise((_, reject) => { rejectOpen = reject }),
+      },
+    })
+    await controller.load()
+    expect(controller.store.getSnapshot().status).toBe('ready')
+    const opening = controller.open()
+    rejectOpen('native unavailable')
+    await opening
+    expect(controller.store.getSnapshot()).toMatchObject({
+      status: 'ready', opening: false, error: 'native unavailable',
+    })
+
     // A first read that failed leaves the action unavailable with the miss
     // recorded; the mirror's next refresh (a commit or reconnect) recovers it.
-    const ctx = {
-      remote: {
-        settings: {
-          describe: vi.fn()
-            .mockRejectedValueOnce(new Error('offline'))
-            .mockResolvedValueOnce(response(true)),
-          openSettingsDocument: vi.fn(),
-        },
+    const wire = {
+      settings: {
+        describe: vi.fn()
+          .mockRejectedValueOnce(new Error('offline'))
+          .mockResolvedValueOnce(response(true)),
+        openSettingsDocument: vi.fn(),
       },
     } as never
-    const mirror = new SettingsDescribeMirror(ctx)
-    const caught = new SettingsDocumentStore(ctx, mirror)
+    const mirror = new SettingsDescribeMirror(wire)
+    const caught = new SettingsDocumentStore(wire, mirror)
     await caught.load()
     expect(caught.store.getSnapshot()).toMatchObject({ status: 'unavailable', error: 'offline' })
     await mirror.load()

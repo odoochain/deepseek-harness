@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LlmRuntime, { createUserMessage, LlmError  } from '@deepseek-ai/dsh-llm'
 import type { LlmFailure, ResolvedRetryPolicy } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
@@ -14,7 +13,6 @@ async function harness(adapter: MockAdapter): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
@@ -92,13 +90,13 @@ describe('agent/request-error', () => {
         code: 'SERVICE_UNAVAILABLE',
       },
     ])
-    expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
+    expect(agent.session.events.filter(event => event.type === 'turn/start')).toHaveLength(1)
     expect(seen.map(item => item.retryPolicy)).toEqual([
       expect.objectContaining({ mode: 'normal' }),
       expect.objectContaining({ mode: 'normal' }),
     ])
     expect(statuses).toEqual(['running', 'idle'])
-    expect(agent.session.snapshotEvents().flatMap(event =>
+    expect(agent.session.events.flatMap(event =>
       event.type === 'request/header' ? [event.data.reason] : [])).toEqual(['initial'])
   })
 
@@ -115,8 +113,8 @@ describe('agent/request-error', () => {
     await agent.whenIdle()
 
     expect(adapter.requests).toHaveLength(1)
-    expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
-    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')).toMatchObject({
+    expect(agent.session.events.filter(event => event.type === 'turn/start')).toHaveLength(1)
+    expect(agent.session.events.find(event => event.type === 'turn/end')).toMatchObject({
       type: 'turn/end',
       data: { reason: { kind: 'aborted', reason: { kind: 'user' } } },
     })
@@ -137,8 +135,8 @@ describe('agent/request-error', () => {
     await agent.whenIdle()
 
     expect(adapter.requests).toHaveLength(1)
-    expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
-    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')).toMatchObject({
+    expect(agent.session.events.filter(event => event.type === 'turn/start')).toHaveLength(1)
+    expect(agent.session.events.find(event => event.type === 'turn/end')).toMatchObject({
       type: 'turn/end',
       data: { reason: { kind: 'error' } },
     })

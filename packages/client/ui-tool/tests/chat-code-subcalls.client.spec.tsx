@@ -120,6 +120,10 @@ async function bench(snapshot: ChatSnapshot) {
   ctx.provide('layout', layout as never)
   ctx.provide('uiWorkspace', {} as never)
   new TestRemote(ctx, { session: { openWorkspacePath } })
+  ctx.provide('connection', {
+    isLoopback: false,
+    generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
+  } as never)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   locale.register(CONVERSATION_NS, { zh: conversationZh, en: conversationEn })

@@ -52,11 +52,10 @@
   max-height: min(680px, calc(100vh - 120px));
   padding: 10px;
   overflow: auto;
-  border: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 12px;
   background: var(--dsw-specific-menu);
-  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
-  box-shadow: var(--dsw-elevation-prominent);
+  box-shadow: var(--dsw-shadow-lv3);
 }
 
 .toolbar,
@@ -104,7 +103,7 @@
   gap: 8px;
   min-width: 0;
   padding: 8px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
+  border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 8px;
   background: transparent;
   color: var(--dsw-alias-label-primary);
@@ -152,7 +151,7 @@
 .task,
 .form {
   padding: 9px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
+  border: 1px solid var(--dsw-alias-border-l1);
   border-radius: 9px;
   background: var(--dsw-alias-bg-base);
 }
@@ -193,7 +192,7 @@
 .form input,
 .form textarea {
   box-sizing: border-box;
-  border: 0.5px solid var(--dsw-alias-border-l4);
+  border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 6px;
   background: var(--dsw-alias-bg-base);
   color: var(--dsw-alias-label-primary);

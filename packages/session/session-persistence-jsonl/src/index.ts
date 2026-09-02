@@ -19,21 +19,13 @@ import {
   SessionPersistence, SessionPersistenceRevision, PersistenceCoordinator, SessionFormatUnsupportedError,
   type BorrowedSessionSource,
   type PersistenceBackend, type SessionLocation, type SessionPersistenceSnapshot,
-  type SessionEventSuffix, type SessionInspection,
+  type SessionInspection,
   type SessionPersistenceRevision as PersistenceRevision, type SessionRawArtifact,
-  type SessionStorageMetadata,
   type StoredPrefix,
 } from '@deepseek-ai/dsh-session-persistence'
-import type {
-  Session,
-  SessionEvent,
-  SessionId,
-  SessionHeader,
-  SessionLogOffset,
-  SessionPreparation,
-} from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionId, SessionHeader, SessionPreparation } from '@deepseek-ai/dsh-session'
 import {
-  encodeSegment, eventLines, logPath, logSuffix, parseHeader, parseHeaderMeta, projectDir, scanLog, sessionDir,
+  encodeSegment, eventLines, logPath, logSuffix, parseHeaderMeta, projectDir, scanLog, sessionDir,
   SessionLogScanner, toHeaderLine,
   type JsonlCompression,
 } from './format.ts'
@@ -183,8 +175,8 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     return { kind: 'jsonl', path: logPath(this.root, meta.cwd, meta.id, this.compression) }
   }
 
-  create(meta: SessionHeader, inheritedEventCount?: SessionLogOffset): Promise<void> {
-    return this.coordinator.create(meta, inheritedEventCount)
+  create(meta: SessionHeader): Promise<void> {
+    return this.coordinator.create(meta)
   }
 
   override ensureMaterialized(session: Session): Promise<void> {
@@ -213,7 +205,7 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
 
   // JSONL is sequential media: no loadStoredFrom hook, so the coordinator
   // parses the stored prefix (both encodings) and skips forward to fromSeq.
-  readFrom(id: SessionId, fromSeq: SessionLogOffset, signal?: AbortSignal): Promise<SessionEventSuffix> {
+  readFrom(id: SessionId, fromSeq: number, signal?: AbortSignal): Promise<{ meta: SessionHeader; events: SessionEvent[] }> {
     return this.coordinator.readFrom(id, fromSeq, signal)
   }
 
@@ -290,13 +282,13 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     } else {
       content = buffer.toString('utf8')
     }
-    const storage = parseHeader(content.split('\n', 1)[0] as string)
-    if (storage === undefined || storage.meta.id !== id) {
+    const meta = parseHeaderMeta(content.split('\n', 1)[0] as string)
+    if (meta === undefined || meta.id !== id) {
       throw new Error(`corrupt session log: invalid header line in "${path}"`)
     }
     // The logical artifact name is `session.jsonl` regardless of the physical
     // encoding suffix (`.jsonl.zstd` marks compression only).
-    return { ...storage, filename: 'session.jsonl', content }
+    return { meta, filename: 'session.jsonl', content }
   }
 
   /**
@@ -337,11 +329,10 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
         prefix = await this.readZstdPrefix(buffer, signal)
       } else {
         signal?.throwIfAborted()
-        const { meta, inheritedEventCount, events, committedBytes } = scanLog(buffer)
+        const { meta, events, committedBytes } = scanLog(buffer)
         signal?.throwIfAborted()
         prefix = {
           meta,
-          inheritedEventCount,
           events,
           ...committedBytes < buffer.byteLength
             ? { tornMarker: { truncateTo: committedBytes, recoveredEvents: [] } }
@@ -403,11 +394,7 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
       }
       if (tornStart === undefined) {
         const prefix = scanner.finish()
-        return {
-          meta: prefix.meta,
-          inheritedEventCount: prefix.inheritedEventCount,
-          events: prefix.events,
-        }
+        return { meta: prefix.meta, events: prefix.events }
       }
 
       let recoveredPlaintext: Buffer = Buffer.alloc(0)
@@ -426,7 +413,6 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
       signal?.throwIfAborted()
       return {
         meta: recoveredPrefix.meta,
-        inheritedEventCount: recoveredPrefix.inheritedEventCount,
         events: recoveredPrefix.events,
         tornMarker: {
           truncateTo: tornStart,
@@ -443,22 +429,18 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
   }
 
   /** Durably append a batch, lazily materializing the file when not yet present. */
-  async appendBatch(
-    storage: SessionStorageMetadata,
-    events: readonly SessionEvent[],
-    isMaterialized: boolean,
-  ): Promise<void> {
+  async appendBatch(meta: SessionHeader, events: readonly SessionEvent[], isMaterialized: boolean): Promise<void> {
     await this.ensureRootEncoding()
     if (isMaterialized) {
-      await this.appendLines(storage.meta, events)
+      await this.appendLines(meta, events)
     } else {
-      await this.materialize(storage, events)
+      await this.materialize(meta, events)
     }
   }
 
   /** Materialize a header-only JSONL artifact for an explicitly durable empty session. */
-  async materializeHeader(storage: SessionStorageMetadata): Promise<void> {
-    await this.materialize(storage, [])
+  async materializeHeader(meta: SessionHeader): Promise<void> {
+    await this.materialize(meta, [])
   }
 
   /**
@@ -467,11 +449,10 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
    * does not require this to be atomic.
    */
   async commitRepair(
-    storage: SessionStorageMetadata,
+    meta: SessionHeader,
     tornMarker: JsonlTornMarker | undefined,
     closers: readonly SessionEvent[],
   ): Promise<void> {
-    const { meta } = storage
     if (tornMarker !== undefined) await this.repair(meta, tornMarker.truncateTo)
     const repairedEvents = [...(tornMarker?.recoveredEvents ?? []), ...closers]
     if (repairedEvents.length > 0) await this.appendLines(meta, repairedEvents)
@@ -546,13 +527,12 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
   // --- materialization / append / repair (file mechanics) ---
 
   /** Atomically write the header line + first batch (temp-write, fsync, publish). */
-  private async materialize(storage: SessionStorageMetadata, events: readonly SessionEvent[]): Promise<void> {
-    const { meta } = storage
+  private async materialize(meta: SessionHeader, events: readonly SessionEvent[]): Promise<void> {
     const project = projectDir(this.root, meta.cwd)
     const dir = sessionDir(this.root, meta.cwd, meta.id)
     const finalPath = logPath(this.root, meta.cwd, meta.id, this.compression)
     await this.rejectOppositeArtifact(meta.cwd, meta.id)
-    const content = await this.encodeMaterialization(storage, events)
+    const content = await this.encodeMaterialization(meta, events)
     /* v8 ignore next -- native Windows coverage exercises this platform dispatch; Linux covers the POSIX peer */
     if (process.platform === 'win32') {
       await this.materializeWin32(project, dir, finalPath, meta.id, content)
@@ -652,11 +632,8 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
   }
 
   /** Encode the header and first batch without combining their frame boundaries. */
-  private async encodeMaterialization(
-    storage: SessionStorageMetadata,
-    events: readonly SessionEvent[],
-  ): Promise<Buffer | string> {
-    const header = JSON.stringify(toHeaderLine(storage.meta, storage.inheritedEventCount)) + '\n'
+  private async encodeMaterialization(meta: SessionHeader, events: readonly SessionEvent[]): Promise<Buffer | string> {
+    const header = JSON.stringify(toHeaderLine(meta)) + '\n'
     if (events.length === 0) {
       return this.compression === 'none' ? header : compressZstdFrame(header)
     }
@@ -976,14 +953,11 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     } catch (error) {
       // Only ENOENT means absent. A permission/I/O error must surface rather
       // than letting load or collision checks proceed under false absence.
+      // Windows reports ENOENT, not ENOTDIR, for `regular-file/child`; verify
+      // the immediate parent so a blocked session directory remains a storage fault.
       /* v8 ignore else -- Windows reports file-valued parents as ENOENT; POSIX covers direct ENOTDIR. */
       if (isENOENT(error)) {
-        // Windows reports ENOENT, not ENOTDIR, for `regular-file/child`, so it
-        // alone verifies the immediate parent to keep a blocked session
-        // directory a storage fault. POSIX open already reported ENOTDIR before
-        // this point, where the extra stat would only cost a syscall per probe.
-        /* v8 ignore next -- native Windows coverage exercises this platform dispatch; POSIX reports ENOTDIR from open */
-        if (process.platform === 'win32') await this.assertLogParentAllowsAbsence(path)
+        await this.assertLogParentAllowsAbsence(path)
         return false
       }
       /* v8 ignore next -- Windows repairs ENOTDIR from ENOENT above; POSIX covers direct ENOTDIR. */

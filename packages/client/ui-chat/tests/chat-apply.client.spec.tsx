@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
-import { act, render } from '@testing-library/react'
 import {
-  SlotTestRuntime, TestRemote, stubSettingsScope, usePinnedBrowserLanguages,
+  chatSnapshot, SlotTestRuntime, TestRemote, stubSettingsScope, usePinnedBrowserLanguages,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
@@ -12,14 +11,11 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   apply as applyConversation, inject as injectConversation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type {
-  ConversationLocationDataSource, ConversationLocationDataStore, ConversationTurnDataMap,
-} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
   apply as applyChat, EMPTY_CHAT_SNAPSHOT, inject as injectChat,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
-  ChatNodeTurnDataInjected, ChatSnapshot, TranscriptViewRowInjected, UseChatNodeTurnData,
+  ChatNodeTurnDataInjected, ChatSnapshot, TranscriptViewRowInjected, UseChat,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { CHAT_SETTINGS_NAMESPACE, type ChatSettings } from '../src/chat-settings.ts'
 
@@ -153,51 +149,37 @@ describe('Chat apply wiring', () => {
     await b.runtime.dispose()
   })
 
-  it('binds Turn data directly to its keyed Location source', async () => {
+  it('binds Turn data through the Chat selector hook for Turn and Step locations', async () => {
     const b = await bench()
     const spec = b.runtime.slots.spec('conversation.chat.node') as unknown as {
       inject: ChatNodeTurnDataInjected
     }
-    let value: number | undefined = 42
-    const listeners = new Set<() => void>()
-    const source: ConversationLocationDataSource<number | undefined> = {
-      getSnapshot: () => value,
-      subscribe: (listener) => {
-        listeners.add(listener)
-        return () => { listeners.delete(listener) }
-      },
-    }
-    const data = {
-      get: () => value,
-      source: () => source,
-    } as unknown as ConversationLocationDataStore<ConversationTurnDataMap>
-    const useChat = vi.fn(() => { throw new Error('Turn data must not read the Chat snapshot') })
+    let snapshot: ChatSnapshot = chatSnapshot()
+    const useChat = ((selector: (value: ChatSnapshot) => unknown) => selector(snapshot)) as UseChat
     const useTurnData = spec.inject.hooks.turnData(
-      { useChat } as unknown as Parameters<typeof spec.inject.hooks.turnData>[0],
-      data,
+      { useChat } as Parameters<typeof spec.inject.hooks.turnData>[0],
+      'node-1',
     )
-    const Probe = ({ useData }: { useData: UseChatNodeTurnData }) => (
-      <output>{useData('metric') ?? 'missing'}</output>
-    )
-    const view = render(<Probe useData={useTurnData} />)
+    const data = { get: (key: string) => key === 'metric' ? 42 : undefined }
+    const turn = { data }
 
-    expect(view.getByText('42')).toBeTruthy()
-    expect(useChat).not.toHaveBeenCalled()
-
-    act(() => {
-      value = 43
-      for (const listener of [...listeners]) listener()
+    snapshot = chatSnapshot({
+      nodes: { get: () => ({ location: { kind: 'turn', turn } }), values: () => [] } as never,
     })
-    expect(view.getByText('43')).toBeTruthy()
+    expect(useTurnData('metric')).toBe(42)
+    snapshot = chatSnapshot({
+      nodes: { get: () => ({ location: { kind: 'step', turn } }), values: () => [] } as never,
+    })
+    expect(useTurnData('metric')).toBe(42)
+    snapshot = chatSnapshot({
+      nodes: { get: () => ({ location: { kind: 'session' } }), values: () => [] } as never,
+    })
+    expect(useTurnData('metric')).toBeUndefined()
+    snapshot = chatSnapshot({
+      nodes: { get: () => undefined, values: () => [] },
+    })
+    expect(useTurnData('metric')).toBeUndefined()
 
-    view.rerender(<Probe useData={spec.inject.hooks.turnData(
-      { useChat } as unknown as Parameters<typeof spec.inject.hooks.turnData>[0],
-      undefined,
-    )} />)
-    expect(view.getByText('missing')).toBeTruthy()
-    expect(useChat).not.toHaveBeenCalled()
-
-    view.unmount()
     await b.runtime.dispose()
   })
 })

@@ -1,5 +1,4 @@
-import type { ModelCatalog } from '@deepseek-ai/dsh-api-remotes/client'
-import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+import type { ClientRemote, ModelCatalog } from '@deepseek-ai/dsh-api-remotes/client'
 import { describe, expect, it, vi } from 'vitest'
 import { ModelCatalogDirectory } from '../src/client/catalog.ts'
 
@@ -11,23 +10,22 @@ const catalog = (model: string): ModelCatalog => ({
 })
 
 function directory(models: () => Promise<unknown>): ModelCatalogDirectory {
-  // The providing plugin's context, scripted down to the one method it calls.
-  return new ModelCatalogDirectory({ remote: { session: { modelCatalog: models } } } as never)
+  return new ModelCatalogDirectory({ modelCatalog: models } as unknown as ClientRemote['session'])
 }
 
 describe('ModelCatalogDirectory', () => {
   it('shares one failing request, exposes the RPC error, and permits a retry', async () => {
     const models = vi.fn()
       .mockResolvedValueOnce({
-        ok: false, error: new RemoteError('gateway/internal', 'catalog offline', {}),
+        ok: false, error: { code: 'unavailable', message: 'catalog offline', details: {} },
       })
       .mockResolvedValueOnce({ ok: true, value: catalog('recovered') })
     const subject = directory(models)
 
     const first = subject.load()
     expect(subject.load()).toBe(first)
-    await expect(first).rejects.toThrow('gateway/internal: catalog offline')
-    expect(subject.store.getSnapshot()).toMatchObject({ status: 'error', error: 'gateway/internal: catalog offline' })
+    await expect(first).rejects.toThrow('unavailable: catalog offline')
+    expect(subject.store.getSnapshot()).toMatchObject({ status: 'error', error: 'unavailable: catalog offline' })
     await expect(subject.load()).resolves.toEqual(catalog('recovered'))
     expect(models).toHaveBeenCalledTimes(2)
   })

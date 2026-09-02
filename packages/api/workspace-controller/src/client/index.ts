@@ -7,7 +7,7 @@ import {
   type ClientRemote,
 } from '@deepseek-ai/dsh-api-gateway/client'
 import type { WorkspaceFollowFrame, WorkspaceFollowIncrement } from '../types.ts'
-import type { WorkspaceFollowSink } from './model.ts'
+import type { WorkspaceFollowSink, WorkspaceRemote } from './model.ts'
 import { ClientWorkspaceModel } from './model.ts'
 import { WorkspaceController } from './service.ts'
 
@@ -18,6 +18,10 @@ export type {
 export { WorkspaceController, WorkspaceCreateError } from './service.ts'
 export type { IWorkspaces, WorkspaceSource } from './service.ts'
 export type { WorkspaceId, WorkspaceView } from '../types.ts'
+
+type WorkspaceStreamRemote = Pick<ClientRemote, '$stream'> & {
+  readonly workspace: WorkspaceRemote
+}
 
 type WorkspaceBaselineFrame = Extract<WorkspaceFollowFrame, { type: 'baseline' }>
 
@@ -42,9 +46,10 @@ export const inject = ['remote', 'remote.workspace']
  * @param ctx - Client root Context.
  */
 export function apply(ctx: Context): void {
-  const model = new ClientWorkspaceModel(ctx.remote.workspace)
+  const remote = ctx.remote as WorkspaceStreamRemote
+  const model = new ClientWorkspaceModel(remote.workspace)
   new WorkspaceController(ctx, model)
-  const control = createWorkspaceStateStream(ctx.remote, {
+  const control = createWorkspaceStateStream(remote, {
     accept: model,
     carrierFailed: () => { model.handleCarrierFailure() },
     failed: (error) => { model.handleStreamFailure(error) },
@@ -68,12 +73,12 @@ export interface WorkspaceStateStreamOptions {
 
 /**
  * Create the reconnecting Workspace state stream.
- * @param remote - Client Remote face carrying the Workspace namespace and the stream factory.
+ * @param remote - generated Workspace namespace and Gateway stream factory.
  * @param options - Workspace state destinations.
  * @returns an unstarted stream owned by the Client Workspace runtime.
  */
 export function createWorkspaceStateStream(
-  remote: ClientRemote,
+  remote: WorkspaceStreamRemote,
   options: WorkspaceStateStreamOptions,
 ): WorkspaceStateStream {
   const stream = remote.$stream<WorkspaceFollowFrame>({

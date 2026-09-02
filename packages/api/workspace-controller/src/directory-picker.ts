@@ -6,14 +6,12 @@
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import { DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
-import type {
-  DirectoryPickerCapabilities, DirectoryPickerErrorCode,
-} from '@deepseek-ai/dsh-host-directory-picker'
+import type { DirectoryPickerCapabilities } from '@deepseek-ai/dsh-host-directory-picker'
 // The seam owns the listing declaration; the generator requires the reference
 // site to name that package rather than this package's re-export of it.
 import type { DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
-import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
-import type { RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, TypertRemoteFailure, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import type { DirectoryPickerErrorDetailsMap } from './types.ts'
 
 const createDirectoryRequestSchema = z.object({
   path: z.string(),
@@ -88,8 +86,8 @@ export class DirectoryPickerController extends TypertRemoteService {
   async createDirectory(path: string, name: string): Promise<string> {
     const request = createDirectoryRequestSchema.safeParse({ path, name })
     if (!request.success) {
-      throw new RemoteError(
-        'gateway/bad-request',
+      throw pickerFailureOf(
+        'bad-request',
         'invalid payload for host.createDirectory',
         { issues: request.error.issues },
       )
@@ -109,8 +107,8 @@ export class DirectoryPickerController extends TypertRemoteService {
   ): DirectoryPickerCapabilities[Kind] {
     const capability = this.ctx.directoryPicker.capability()
     if (capability.kind !== kind) {
-      throw new RemoteError(
-        'directory-picker/unavailable',
+      throw pickerFailureOf(
+        'directory-picker-unavailable',
         `directoryPicker.${method} needs the ${kind} capability; the composed picker serves "${capability.kind}"`,
         { capability: capability.kind },
       )
@@ -120,15 +118,19 @@ export class DirectoryPickerController extends TypertRemoteService {
 }
 
 /**
- * Wire code answered for each seam browse failure. The seam's closed codes are
- * its own local vocabulary, so this controller owns the projection onto the
- * `directory-picker/*` codes a Remote caller discriminates on.
+ * Raise one entry of the picking wire failure vocabulary.
+ * @param code - the failure code a caller discriminates on.
+ * @param message - operator-facing description.
+ * @param details - the payload this code carries.
+ * @returns the failure to throw across the Remote boundary.
  */
-const BROWSE_FAILURE_CODES = {
-  'directory-unreadable': 'directory-picker/unreadable',
-  'directory-exists': 'directory-picker/exists',
-  'directory-create-failed': 'directory-picker/create-failed',
-} as const satisfies Record<DirectoryPickerErrorCode, RemoteErrorCode>
+function pickerFailureOf<Code extends keyof DirectoryPickerErrorDetailsMap>(
+  code: Code,
+  message: string,
+  details: DirectoryPickerErrorDetailsMap[Code],
+): TypertRemoteFailure {
+  return new TypertRemoteFailure({ code, message, details })
+}
 
 /**
  * Classify a browse-primitive rejection: the seam's own closed codes carry the
@@ -136,21 +138,16 @@ const BROWSE_FAILURE_CODES = {
  * @param error - the primitive's rejection.
  * @returns the failure to throw across the Remote boundary.
  */
-function browseFailure(error: unknown): RemoteError {
+function browseFailure(error: unknown): TypertRemoteFailure {
   if (error instanceof DirectoryPickerError) {
-    return new RemoteError(
-      BROWSE_FAILURE_CODES[error.code],
-      error.message,
-      { path: error.path },
-      { cause: error },
-    )
+    return pickerFailureOf(error.code, error.message, { path: error.path })
   }
-  return new RemoteError('gateway/internal', errorMessage(error), {}, { cause: error })
+  return pickerFailureOf('internal', errorMessage(error), {})
 }
 
 /**
  * Classify a cancellable primitive's rejection. An abort is the caller's own
- * timeout or disconnect, not a backend failure, so it answers `gateway/cancelled`
+ * timeout or disconnect, not a backend failure, so it answers `cancelled`
  * before the business classification runs.
  * @param error - the primitive's rejection.
  * @param signal - the caller lifetime the primitive ran under.
@@ -163,10 +160,10 @@ function cancellableFailure(
   signal: AbortSignal,
   cancelled: string,
   failed?: string,
-): RemoteError {
-  if (signal.aborted) return new RemoteError('gateway/cancelled', cancelled, {}, { cause: error })
+): TypertRemoteFailure {
+  if (signal.aborted) return pickerFailureOf('cancelled', cancelled, {})
   if (failed === undefined) return browseFailure(error)
-  return new RemoteError('gateway/internal', `${failed}: ${errorMessage(error)}`, {}, { cause: error })
+  return pickerFailureOf('internal', `${failed}: ${errorMessage(error)}`, {})
 }
 
 function errorMessage(error: unknown): string {

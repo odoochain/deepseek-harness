@@ -8,10 +8,7 @@
  * reducer cannot invent groups. Opening from a closed state, the shell seeds
  * the roster with {@link seedGroups} and then dispatches `hit`; a `hit`
  * while open (query refinement) resets the existing groups to pending under
- * a new generation while keeping their items on screen until the new fetch
- * settles (stale-while-revalidate — the render layer shows skeletons only
- * for a pending group with no items). Auto-close and explicit close drop
- * the groups.
+ * a new generation. Auto-close and explicit close drop the groups.
  */
 import type { InputTriggerCandidate, InputTriggerSource } from '../types.ts'
 import type { ExactMatch, MenuReduce, MenuState } from './contract.ts'
@@ -99,13 +96,8 @@ export const menuReduce: MenuReduce = (state, ev) => {
         open: true,
         hit: ev.hit,
         generation: state.generation + 1,
-        // Items and highlight survive the refinement (stale-while-revalidate):
-        // the previous query's candidates stay rendered with the highlight
-        // parked where it was while the new fetch runs, and the settled
-        // generation replaces the items and revalidates the highlight
-        // wholesale. Pending status still fences picks off the stale rows.
-        groups: state.groups.map(g => ({ ...g, status: 'pending' })),
-        highlight: state.highlight,
+        groups: state.groups.map(g => ({ ...g, status: 'pending', items: [] })),
+        highlight: null,
       }
     }
     case 'source-settled': {

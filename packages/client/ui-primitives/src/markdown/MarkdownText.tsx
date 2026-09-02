@@ -43,11 +43,7 @@ function renderSettled(
     footnoteCounts: new Map(),
   }
   const blocks = wrapBlockChildren(
-    renderBlocks(root.children.map((node, index) => ({
-      node,
-      /* v8 ignore next -- parseFull uses parseGfm, which stamps every top-level node. */
-      key: node.position?.start.offset ?? -(index + 1),
-    })), context),
+    renderBlocks(root.children.map((node, index) => ({ node, key: index })), context),
     false,
   )
   const section = renderFootnoteSection(context)

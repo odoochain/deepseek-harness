@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod'
-import { canonicalHeader, SessionSeq } from '@deepseek-ai/dsh-session'
+import { canonicalHeader } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { estimateSystemTokens, estimateToolsTokens } from './estimate.ts'
 import { foldSurfaceProjection } from './surface-projection.ts'
@@ -21,7 +21,6 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
 
 /** Non-negative integer token count (the shared figure shape). */
 const tokenCount = z.number().int().nonnegative()
-const sessionSeq = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq)
 
 /** The context-breakdown state schema and source of its inferred type. */
 const contextBreakdownStateSchema = z.object({
@@ -29,8 +28,8 @@ const contextBreakdownStateSchema = z.object({
   toolsTokens: tokenCount,
   messageTokens: tokenCount,
   claim: z.object({
-    start: sessionSeq,
-    end: sessionSeq,
+    start: tokenCount,
+    end: tokenCount,
     tokens: tokenCount,
   }).optional(),
 }).strict()

@@ -34,8 +34,6 @@ interface SessionRecord {
 interface SessionLogSnapshot {
   /** Cloned session header selected from the same observation as `events`. */
   session: SessionHeader
-  /** Exact number of fork-inherited events in the observed log. */
-  inheritedEventCount: SessionLogOffset
   /** Cloned contiguous raw events after persistence repair and replay validation. */
   events: SessionEvent[]
 }
@@ -46,10 +44,8 @@ interface SessionLogSnapshot {
 interface SessionSurfaceSnapshot {
   /** Cloned session header selected from the same corpus observation as `events`. */
   session: SessionHeader
-  /** Exact number of fork-inherited events in the observed log. */
-  inheritedEventCount: SessionLogOffset
   /** Highest raw-log seq included in the observation, or `null` for an empty log. */
-  capturedThroughSeq: OptionalSessionSeq
+  capturedThroughSeq: number | null
   /** Cloned current surface events in model-history order. */
   events: SurfaceEvent[]
 }
@@ -94,7 +90,7 @@ interface SessionEventRecord {
   /** Session that owns the event. */
   sessionId: SessionId
   /** Monotonic event seq within the session. */
-  seq: SessionSeq
+  seq: number
   /** Discriminant of the session event. */
   type: SessionEventType
   /** Event timestamp in Unix epoch milliseconds. */
@@ -270,7 +266,7 @@ interface SessionEventReadRequest {
   /** Session that owns the target event. */
   sessionId: SessionId
   /** Target event seq. */
-  seq: SessionSeq
+  seq: number
   /** Number of preceding raw events to include. */
   before?: number
   /** Number of following raw events to include. */
@@ -283,16 +279,14 @@ interface SessionEventReadRequest {
 interface SessionEventWindow {
   /** Cloned header for the live-preferred source read. */
   session: SessionHeader
-  /** Exact number of fork-inherited events in the observed log. */
-  inheritedEventCount: SessionLogOffset
   /** Full cloned target event. */
   target: SessionEvent
   /** Full cloned events from `startSeq` through `endSeq`. */
   events: SessionEvent[]
   /** First seq included in `events`. */
-  startSeq: SessionSeq
+  startSeq: number
   /** Last seq included in `events`. */
-  endSeq: SessionSeq
+  endSeq: number
 }
 ```
 
@@ -306,7 +300,7 @@ interface SessionEventTraceRequest {
   /** Session that owns the target event. */
   sessionId: SessionId
   /** Target event seq. */
-  seq: SessionSeq
+  seq: number
 }
 ```
 
@@ -316,15 +310,15 @@ interface SessionEventTrace {
   /** Lightweight target record. */
   target: SessionEventRecord
   /** Immediate positional replacement event, when the target was shadowed. */
-  replacedBy?: SessionSeq
+  replacedBy?: number
   /** Positional replacers from the immediate replacement to the final replacement. */
-  replacementChain: SessionSeq[]
+  replacementChain: number[]
   /** Surface nodes directly removed when the target itself performed a replacement. */
-  replacedEventSeqs: SessionSeq[]
+  replacedEventSeqs: number[]
   /** Earlier events cited directly as sources, in their recorded order. */
-  sourceEventSeqs: SessionSeq[]
+  sourceEventSeqs: number[]
   /** Later events that directly cite the target as a source, in log order. */
-  derivedEventSeqs: SessionSeq[]
+  derivedEventSeqs: number[]
 }
 ```
 

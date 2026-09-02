@@ -10,7 +10,6 @@ import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-
 import type {
   SessionPendingInteractionBase,
 } from '@deepseek-ai/dsh-client-ui-session/client'
-import type {} from '@deepseek-ai/dsh-schedule/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
 import {
@@ -38,8 +37,6 @@ export interface SessionNode {
   runningSubagentCount: number
   /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
   completed: boolean
-  /** The current list projection contains at least one active Schedule record. */
-  hasActiveSchedule: boolean
   updatedAt: number
 }
 
@@ -77,8 +74,6 @@ export interface SearchResultNode {
   runningSubagentCount: number
   /** Finished running while not selected and not yet opened (the green "done" reminder dot). */
   completed: boolean
-  /** The current list projection contains at least one active Schedule record. */
-  hasActiveSchedule: boolean
   snippet?: string
 }
 
@@ -141,11 +136,6 @@ function sessionVisible(session: SessionSummary, current: SessionId | undefined,
  */
 function sessionTitle(session: SessionSummary): string {
   return session.blank ? '' : session.displayTitle
-}
-
-/** The list projection alone owns the best-effort active-Schedule indicator. */
-function hasActiveSchedule(session: SessionSummary): boolean {
-  return (session.projectionValues?.schedule?.length ?? 0) > 0
 }
 
 /** Build one group without projecting session lineage into presentation. */
@@ -254,7 +244,6 @@ function sessionNode(
     running: s.running,
     runningSubagentCount: descendants.get(s.id)?.runningCount ?? 0,
     completed: s.completed === true,
-    hasActiveSchedule: hasActiveSchedule(s),
     updatedAt: s.updatedAt,
     ...(pendingInteraction === undefined ? {} : { pendingInteraction }),
   }
@@ -418,7 +407,6 @@ export function deriveSearchResults(
           ? {}
           : { pendingInteraction }),
         completed: summary.completed === true,
-        hasActiveSchedule: hasActiveSchedule(summary),
         ...match === undefined ? {} : { snippet: match.snippet },
       }
     }),

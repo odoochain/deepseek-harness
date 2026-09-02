@@ -8,7 +8,7 @@ import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-l
 
 const binScript = fileURLToPath(new URL('../../../test-support/loader-smoke/tests/fixtures/headless-driver.ts', import.meta.url))
 const configPath = fileURLToPath(new URL(
-  './fixtures/domain/goal.patch.yml',
+  './fixtures/domain/cordis.yml',
   import.meta.url,
 ))
 const repoTsconfig = fileURLToPath(new URL('../../../../tsconfig.json', import.meta.url))
@@ -23,7 +23,7 @@ async function jsonlFiles(dir: string): Promise<string[]> {
   return paths.flat()
 }
 
-describe('goal domain through the production headless profile and process', () => {
+describe('goal domain through a real cordis.yml and headless process', () => {
   it('persists the Loader-mounted snapshot without starting a goal round', async () => {
     let events: SessionEvent[] = []
     const { stdout, stderr } = await runLoaderSmoke({

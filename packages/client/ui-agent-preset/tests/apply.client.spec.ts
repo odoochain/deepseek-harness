@@ -10,18 +10,19 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
+import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-agent-preset/client'
 import { AgentPresetLabel } from '../src/client/AgentPresetLabel.tsx'
 import type { AgentPresetLabelInjected } from '../src/client/AgentPresetLabel.tsx'
+import { AgentPresetRow } from '../src/client/AgentPresetRow.tsx'
+import type { AgentPresetRowInjected } from '../src/client/AgentPresetRow.tsx'
 import { AgentPresetSection } from '../src/client/AgentPresetSection.tsx'
 import type { AgentPresetSectionInjected } from '../src/client/AgentPresetSection.tsx'
 import { AgentPresetSeat } from '../src/client/AgentPresetSeat.tsx'
 import type { AgentPresetSeatInjected } from '../src/client/AgentPresetSeat.tsx'
 import { AgentPresetSeatController } from '../src/client/seat-store.ts'
-import { apply as hostApply } from '../src/index.ts'
 
 // These specs assert the shipped Chinese copy. The lane has no jsdom `window`,
 // so browser-language detection never runs and a fresh LocaleRuntime opens on
@@ -114,6 +115,7 @@ async function bench() {
   }
   ctx.provide('remote.agentPresets', agentPresets as never)
   Object.assign(remote, { agentPresets })
+  ctx.provide('connection', { isLoopback: true } as never)
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
   return { ctx, slots: ctx.get('slots') as SlotRegistry, calls, moveDefault, remote }
 }
@@ -173,25 +175,21 @@ function sessionsDouble(state: {
 }
 
 describe('ui-agent-preset apply', () => {
-  it('keeps the host Loader entry inert', () => {
-    expect(hostApply).not.toThrow()
-  })
-
   it('declares the services it uses', () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'remote', 'remote.agentPresets', 'remote.settings',
+      'slots', 'locale', 'remote', 'remote.agentPresets', 'remote.settings', 'settingsScope',
     ])
   })
 
-  it('registers the settings section and no General row', async () => {
+  it('registers the General row and the settings section', async () => {
     const { ctx, slots } = await bench()
     declareRoot(slots)
 
     await ctx.plugin({ inject: [...inject], apply }).await()
 
-    // The default preset is edited in the section, where the roster is
-    // visible; a General row would duplicate the same settings field.
-    expect(slots.entries('settings.general.item')).toHaveLength(0)
+    const row = slots.entries('settings.general.item')[0]!
+    expect(row.component).toBe(AgentPresetRow)
+    expect(row.options).toMatchObject({ id: 'agent-preset', order: -25 })
     const section = slots.entries('settings.section')[0]!
     expect(section.component).toBe(AgentPresetSection)
     expect(section.options).toMatchObject({ id: 'agent-presets', order: 20 })
@@ -208,14 +206,21 @@ describe('ui-agent-preset apply', () => {
     await vi.waitFor(() => { expect(slots.entries('settings.section')).toHaveLength(1) })
   })
 
-  it('hands the section its own store and default write', async () => {
+  it('hands each surface its own store and actions', async () => {
     const { ctx, slots } = await bench()
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
+    const row = (slots.entries('settings.general.item')[0]!.inject as unknown as () => AgentPresetRowInjected)()
     const section = (slots.entries('settings.section')[0]!.inject as unknown as () => AgentPresetSectionInjected)()
 
+    expect(row.hooks.agentPreset).not.toBe(section.hooks.agentPresetSection)
+    // Each thunk reaches its own controller: the row's load fills the row's
+    // store, and the section's default write does not go through the row.
+    await row.load()
+    await row.select('standard')
     await section.makeDefault('standard')
+    expect(row.hooks.agentPreset.getSnapshot().options).toEqual([{ id: 'standard', trust: 'system' }])
     expect(section.hooks.agentPresetSection.getSnapshot().rows)
       .toEqual([{ id: 'standard', trust: 'system', isDefault: true }])
   })
@@ -289,8 +294,8 @@ describe('ui-agent-preset apply', () => {
     remote.emit('settings/document-updated', ['agent-presets', 1])
     await vi.waitFor(() => { expect(calls.length).toBeGreaterThan(before) })
 
-    // Only the header label's roster reloads: a section nobody opened has
-    // nothing to converge, and reading the roster for it would be wasted.
+    // Only the General row reloads: a section nobody opened has nothing to
+    // converge, and reading the roster for it would be a wasted round trip.
     expect(calls.length - before).toBe(1)
   })
 
@@ -466,7 +471,7 @@ describe('ui-agent-preset apply', () => {
     expect(calls.filter(call => call === 'select:minimal')).toHaveLength(spent)
   })
 
-  it('loads the header label from the shared roster store', async () => {
+  it('gives the header label the same roster the General row reads', async () => {
     const { ctx, slots } = await bench()
     declareRoot(slots)
     declareConversation(slots)
@@ -476,9 +481,14 @@ describe('ui-agent-preset apply', () => {
     await ctx.plugin({ inject: [...inject, 'conversation', 'sessions', 'uiWorkspace'], apply }).await()
     const label = (slots.entries('conversation.session.header.actions')[0]!
       .inject as unknown as () => AgentPresetLabelInjected)()
+    const row = (slots.entries('settings.general.item')[0]!
+      .inject as unknown as () => AgentPresetRowInjected)()
 
     await label.load()
 
+    // One roster behind both: the label resolves a name the settings row's own
+    // load already fetched, rather than issuing a second read per session.
+    expect(label.hooks.agentPresets).toBe(row.hooks.agentPreset)
     expect(label.hooks.agentPresets.getSnapshot().options).toEqual([{ id: 'standard', trust: 'system' }])
   })
 
@@ -571,10 +581,8 @@ describe('AgentPresetSeatController reconciliation', () => {
   it('uses the deployment default without a Session and clears it for an uncomposed Session', async () => {
     const state: { current?: { id: SessionId; blank: boolean } } = {}
     const controller = new AgentPresetSeatController({
-      remote: {
-        agentPresets: {
-          list: () => Promise.resolve(ROSTER_ONE),
-        },
+      agentPresets: {
+        list: () => Promise.resolve(ROSTER_ONE),
       },
     } as never, () => state.current)
 
@@ -587,35 +595,43 @@ describe('AgentPresetSeatController reconciliation', () => {
     expect(controller.store.getSnapshot().current).toBe('')
   })
 
-  it('restores an empty current value after a refused switch for an uncomposed Session', async () => {
-    const select = () => Promise.resolve({
-      ok: false as const, error: new RemoteError('gateway/internal', 'selection rejected', {}),
-    })
+  it.each([
+    {
+      name: 'RPC rejection',
+      select: () => Promise.resolve({
+        ok: false as const, error: { code: 'failed', message: 'selection rejected', details: {} },
+      }),
+      message: 'selection rejected',
+    },
+    {
+      name: 'transport failure',
+      select: () => Promise.reject(new Error('transport failed')),
+      message: 'transport failed',
+    },
+  ])('restores an empty current value after $name for an uncomposed Session', async ({ select, message }) => {
     const controller = new AgentPresetSeatController({
-      remote: { agentPresets: { select } },
+      agentPresets: { select },
     } as never, () => ({ id: SessionId('uncomposed'), blank: true }))
 
     await controller.select('minimal')
 
     expect(controller.store.getSnapshot()).toMatchObject({
-      busy: false, current: '', error: 'selection rejected',
+      busy: false, current: '', error: message,
     })
   })
 
   it('keeps the bare cause of a mount failure, not the frame that names the preset again', async () => {
     const reason = 'failed to import loader entry ctx (@deepseek-ai/dsh-gone): Cannot find package'
     const controller = new AgentPresetSeatController({
-      remote: {
-        agentPresets: {
-          select: () => Promise.resolve({
-            ok: false as const,
-            error: new RemoteError(
-              'agent-preset/invalid',
-              `agent-presets: preset "broken" failed to mount: ${reason}`,
-              { agentPreset: 'broken', reason },
-            ),
-          }),
-        },
+      agentPresets: {
+        select: () => Promise.resolve({
+          ok: false as const,
+          error: {
+            code: 'agent-preset-invalid',
+            message: `agent-presets: preset "broken" failed to mount: ${reason}`,
+            details: { agentPreset: 'broken', reason },
+          },
+        }),
       },
     } as never, () => ({ id: SessionId('uncomposed'), blank: true }))
 

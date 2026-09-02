@@ -10,7 +10,6 @@ import { errorMessage, TeamError } from './error.ts'
 import { TeamJournal } from './journal.ts'
 import { TeamRuntimeLifecycle } from './lifecycle.ts'
 import { TeamMailbox } from './mailbox.ts'
-import { teamProjectionDefinition } from './projection.ts'
 import { TeamRoster } from './roster.ts'
 import type { TeamMembership } from './roster.ts'
 import { TeamTaskBoard } from './task-board.ts'
@@ -34,6 +33,7 @@ export type * from './types.ts'
 export type { TeamMembership } from './roster.ts'
 export { TeamId, TeamMessageId, TeamTaskId } from './types.ts'
 export { TeamError } from './error.ts'
+export { foldTeam } from './fold.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -57,7 +57,7 @@ function positiveLimit(name: string, value: number): number {
 
 /** Agent Teams service backed by the exact live Lead Session log. */
 export class TeamService extends TypertRemoteService {
-  static inject = ['agents', 'sessions', 'sessionPersistence', 'sessionProjections', 'subagents']
+  static inject = ['agents', 'sessions', 'sessionPersistence', 'subagents']
 
   static Config: z<Config> = z.object({
     maxMembers: z.number().step(1).min(1).default(DEFAULT_MAX_MEMBERS),
@@ -113,16 +113,7 @@ export class TeamService extends TypertRemoteService {
       const membership = this.roster.tryMembership(agent)
       if (membership !== undefined) this.activity.notify(membership.id)
     })
-    ctx.effect(() => {
-      const disposeProjection = ctx.root.sessionProjections.register(teamProjectionDefinition)
-      return async () => {
-        try {
-          await this.disposeRuntime()
-        } finally {
-          disposeProjection()
-        }
-      }
-    }, 'agentTeams.runtimeLifecycle()')
+    ctx.effect(() => () => this.disposeRuntime(), 'agentTeams.runtimeLifecycle()')
     for (const agent of ctx.agents.list()) this.scheduleRecovery(agent)
   }
 

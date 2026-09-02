@@ -134,9 +134,8 @@ function hasText(data: AssistantChatData): data is FinalAssistantChatData {
 }
 
 function tailData(context: ConversationNodeContext<TurnTailState>): TurnTailChatData | null {
-  const end = context.state === undefined
-    ? context.matches.find(match => match.event.type === 'turn/end')
-    : context.state.end
+  const end = context.state?.end
+    ?? context.matches.find(match => match.event.type === 'turn/end')
   if (end?.event.type !== 'turn/end') return null
   const turn = turnLocation(context)
   if (turn === undefined) return null

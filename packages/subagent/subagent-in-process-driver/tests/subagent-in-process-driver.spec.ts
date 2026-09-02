@@ -10,7 +10,6 @@ import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
 import * as AgentInvariant from '@deepseek-ai/dsh-agent/invariant'
 import * as AgentLoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
 import SubagentRuntime, { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import { maxTokensResponse, MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { startInProcessRun } from '../src/index.ts'
@@ -29,7 +28,6 @@ async function setup(script: Script, parentOptions: Partial<AgentOptions> = {}) 
   await mountAgentLoopTestDependencies(ctx)
   await mountInvariants(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SubagentRuntime)
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
@@ -152,7 +150,7 @@ describe('startInProcessRun', () => {
     let injected = false
     ctx.on('session/flush', (session) => {
       if (injected || session.header.parentSession === undefined) return
-      const lastEnd = session.snapshotEvents().findLast(event => event.type === 'turn/end')
+      const lastEnd = session.events.findLast(event => event.type === 'turn/end')
       if (lastEnd?.type !== 'turn/end' || lastEnd.data.reason.kind !== 'max-tokens') return
       injected = true
       session.append('user/message', createUserMessage({
@@ -166,7 +164,7 @@ describe('startInProcessRun', () => {
     const child = ctx.agents.get(run.id)!
 
     expect(injected).toBe(false)
-    expect(child.session.snapshotEvents().findLast(event => event.type === 'turn/end'))
+    expect(child.session.events.findLast(event => event.type === 'turn/end'))
       .toMatchObject({ data: { reason: { kind: 'max-tokens' } } })
     expect(result.stopReason).toBe('max-tokens')
     await run.dispose()
@@ -201,14 +199,13 @@ describe('startInProcessRun', () => {
     const { ctx, parent } = await setup([textResponse('parent answer'), textResponse('child answer')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'parent question' }], source: { kind: 'user' } }))
     await parent.whenIdle()
-    const seed = parent.session.snapshotEvents()
+    const seed = parent.session.events.slice()
     const run = await startInProcessRun(request(parent), { seed })
     const result = await run.result
     expect(text(result.output)).toBe('child answer')
     const child = ctx.agents.get(run.id)!
-    expect(child.session.header.isSeeded).toBe(true)
-    expect(child.session.inheritedEventCount).toBe(seed.length)
-    expect(child.session.snapshotEvents().slice(0, seed.length)).toEqual(seed)
+    expect(child.session.header.seedLength).toBe(seed.length)
+    expect(child.session.events.slice(0, seed.length)).toEqual(seed)
     await run.dispose()
   })
 
@@ -329,7 +326,7 @@ describe('startInProcessRun', () => {
     })
     expect(adapter.requests[0]?.signal?.reason).toEqual({ kind: 'parent' })
     const child = parent.ctx.agents.get(signalled.id)
-    const turnEnd = child?.session.snapshotEvents().findLast(event => event.type === 'turn/end')
+    const turnEnd = child?.session.events.findLast(event => event.type === 'turn/end')
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason).toEqual({ kind: 'aborted', reason: { kind: 'parent' } })
     await signalled.dispose()
 

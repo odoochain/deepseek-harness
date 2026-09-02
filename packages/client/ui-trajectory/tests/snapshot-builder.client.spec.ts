@@ -5,9 +5,6 @@ import type {
 } from '../src/client/trajectory-contract.ts'
 import { TrajectorySnapshotBuilder } from '../src/client/trajectory-snapshot-builder.ts'
 
-const EMPTY_LOCATION_DATA_SOURCE = { getSnapshot: () => undefined, subscribe: () => () => {} }
-const EMPTY_LOCATION_DATA = { get: () => undefined, source: () => EMPTY_LOCATION_DATA_SOURCE }
-
 function assistantRequest(startSeq: number, step: number): Extract<RequestView, { purpose: 'assistant' }> {
   return {
     purpose: 'assistant',
@@ -33,7 +30,7 @@ function contribution(
 }
 
 function stepLocation(turn: number, step: number): TrajectoryRequestHeaderState['location'] {
-  const data = EMPTY_LOCATION_DATA
+  const data = { get: () => undefined }
   const stepLocation = {
     turn,
     step,

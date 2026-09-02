@@ -5,7 +5,6 @@ import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
 import { SessionControlController } from '../src/control.ts'
 import type { SessionControlFrame } from '../src/types.ts'
@@ -28,7 +27,7 @@ function producer(label = 'sleep 60') {
   return { spec, reads, settle: (outcome: JobOutcome) => { settle(outcome) } }
 }
 
-async function harness(withJobs: boolean): Promise<{
+async function harness(withRegistry: boolean): Promise<{
   ctx: Context
   session: Session
   agent: Agent
@@ -37,8 +36,7 @@ async function harness(withJobs: boolean): Promise<{
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(AgentRegistry)
-  await ctx.plugin(SessionProjectionRegistry)
-  if (withJobs) {
+  if (withRegistry) {
     await ctx.plugin(LocalJobRegistry)
     ctx.jobs.attachController('session-controller-test')
   }

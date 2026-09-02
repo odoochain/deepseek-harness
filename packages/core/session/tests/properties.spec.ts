@@ -102,7 +102,7 @@ describe('Session properties', () => {
   it('seq is strictly monotonic and zero-based contiguous', () => {
     fc.assert(fc.property(logArb, (events) => {
       const session = build(events)
-      session.snapshotEvents().forEach((event, i) => { expect(event.seq).toBe(i) })
+      session.events.forEach((event, i) => { expect(event.seq).toBe(i) })
       expect(session.seq).toBe(events.length)
     }))
   })
@@ -110,10 +110,10 @@ describe('Session properties', () => {
   it('replay-from-seed reproduces the derivation identically', () => {
     fc.assert(fc.property(logArb, (events) => {
       const original = build(events)
-      const replayed = Session.create(SessionId(`replay-${counter++}`), original.snapshotEvents())
+      const replayed = Session.create(SessionId(`replay-${counter++}`), [...original.events])
       expect(replayed.deriveMessages()).toEqual(original.deriveMessages())
       // Every explicit replay grows by exactly one log-only boundary.
-      expect(replayed.snapshotEvents().slice(0, original.seq)).toEqual(original.snapshotEvents())
+      expect(replayed.events.slice(0, original.seq)).toEqual(original.events)
       expect(replayed.seq).toBe(original.seq + 1)
     }))
   })
@@ -121,10 +121,10 @@ describe('Session properties', () => {
   it('replaying a log that already ends in end-seed adds no further marker', () => {
     fc.assert(fc.property(logArb, (events) => {
       const original = build(events)
-      const once = Session.create(SessionId(`idem-a-${counter++}`), original.snapshotEvents())
-      const twice = Session.create(SessionId(`idem-b-${counter++}`), once.snapshotEvents())
+      const once = Session.create(SessionId(`idem-a-${counter++}`), [...original.events])
+      const twice = Session.create(SessionId(`idem-b-${counter++}`), [...once.events])
       // Lazy resume makes browsing a pickup, so this must not grow per open.
-      expect(twice.snapshotEvents()).toEqual(once.snapshotEvents())
+      expect(twice.events).toEqual(once.events)
     }))
   })
 
@@ -157,7 +157,7 @@ describe('Session properties', () => {
     fc.assert(fc.property(logArb, (events) => {
       const session = build(events)
       const messages = session.deriveMessages()
-      const before = structuredClone(session.snapshotEvents())
+      const before = structuredClone(session.events)
       for (const m of messages) {
         expect(['user', 'assistant', 'system']).toContain(m.role)
         // Derived messages are frozen shared projections: mutation THROWS
@@ -165,7 +165,7 @@ describe('Session properties', () => {
         expect(Object.isFrozen(m)).toBe(true)
         expect(() => { m.content.push({ type: 'text', text: 'mutation' }) }).toThrow(TypeError)
       }
-      expect(session.snapshotEvents()).toEqual(before)
+      expect(session.events).toEqual(before)
     }))
   })
 })

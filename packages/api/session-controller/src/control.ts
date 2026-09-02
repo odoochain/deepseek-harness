@@ -2,12 +2,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { Deque } from '@deepseek-ai/dsh-deque'
 import type { JobSnapshot } from '@deepseek-ai/dsh-jobs'
 import type {
-  Session, SessionEvent, SessionEventMap, SessionId, UserMessage,
+  JsonValue, Session, SessionEvent, SessionEventMap, SessionId, UserMessage,
 } from '@deepseek-ai/dsh-session'
-import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {
   SessionControlBaseline,
   SessionControlFrame,
@@ -24,13 +22,15 @@ export class SessionControlController {
   /** @param ctx - Host context carrying live Agent, projection, and jobs services. */
   constructor(private readonly ctx: Context) {
     ctx.on('session/event', (session, event) => { this.onSessionEvent(session, event) })
-    ctx.sessionProjections.onChanged((session, key, value, seq) => {
-      this.broadcast({
-        type: 'projection',
-        sessionId: session.id,
-        key,
-        value: value as JsonValue,
-        seq,
+    ctx.inject(['sessionProjections'], (projectionCtx) => {
+      projectionCtx.sessionProjections.onChanged((session, key, value, seq) => {
+        this.broadcast({
+          type: 'projection',
+          sessionId: session.id,
+          key,
+          value: value as JsonValue,
+          seq,
+        })
       })
     })
     ctx.inject(['jobs'], (jobsCtx) => {
@@ -83,14 +83,17 @@ export class SessionControlController {
   private projectionBaseline(
     sessions: readonly Session[],
   ): Readonly<Record<SessionId, SessionProjectionBaseline>> {
+    const registry = this.ctx.get('sessionProjections')
     const blocks = Object.create(null) as Record<SessionId, SessionProjectionBaseline>
     for (const session of sessions) {
-      const snapshot = this.ctx.sessionProjections.snapshot(session)
-      blocks[session.id] = {
-        asOfSeq: snapshot.asOfSeq,
-        // Every projection definition validates its value before snapshot publication.
-        values: snapshot.values as SessionProjectionValues,
-      }
+      const snapshot = registry?.snapshot(session)
+      blocks[session.id] = snapshot === undefined
+        ? { asOfSeq: session.seq - 1, values: {} }
+        : {
+          asOfSeq: snapshot.asOfSeq,
+          // Every projection definition validates its value before snapshot publication.
+          values: snapshot.values as SessionProjectionValues,
+        }
     }
     return blocks
   }
@@ -131,13 +134,13 @@ export class SessionControlController {
 }
 
 class ControlQueue {
-  private readonly buffer = new Deque<SessionControlFrame>()
+  private readonly buffer: SessionControlFrame[] = []
   private wake: (() => void) | undefined
   private done = false
 
   push(frame: SessionControlFrame): void {
     if (this.done) return
-    this.buffer.pushBack(frame)
+    this.buffer.push(frame)
     const wake = this.wake
     this.wake = undefined
     wake?.()
@@ -156,14 +159,14 @@ class ControlQueue {
     signal.addEventListener('abort', onAbort, { once: true })
     try {
       while (!this.done && !signal.aborted) {
-        const frame = this.buffer.popFront()
+        const frame = this.buffer.shift()
         if (frame !== undefined) {
           yield frame
           continue
         }
         await new Promise<void>((resolve) => { this.wake = resolve })
       }
-      while (this.buffer.size > 0 && !signal.aborted) yield this.buffer.popFront() as SessionControlFrame
+      while (this.buffer.length > 0 && !signal.aborted) yield this.buffer.shift() as SessionControlFrame
     } finally {
       signal.removeEventListener('abort', onAbort)
       this.end()

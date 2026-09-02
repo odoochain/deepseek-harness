@@ -48,14 +48,16 @@ The service stores nothing by itself; mount a provider such as the shipped file-
 A plugin registers its own namespace with a schemastery schema, optionally supplying the composition entry as the `base` layer so the resolved value starts from what the deployment already configured:
 
 ```text
-const scope = ctx.settings.register('ui-theme', ThemeSchema, {
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+
+const scope = ctx.settings.register(settingsNamespace('ui-theme'), ThemeSchema, {
   base: config,   // composition entry config; the user layer resolves above it
 })
 const theme = scope.get()              // deep-frozen resolved snapshot
 scope.update({ density: 'compact' })   // merges into the user section and persists
 ```
 
-Literal namespace arguments are checked by TypeScript against the lowercase letter, digit, and hyphen grammar; dynamically supplied strings receive the same validation at runtime. `ctx.settings.installSection(owner, ns, schema, entry, hooks)` packages the optional-service wiring for a consumer plugin: while a settings service exists it registers the namespace with the plugin's composition entry as `base`; when the service goes away the plugin falls back to its entry config and keeps working exactly as composed.
+`installSettingsSection` packages this wiring for a consumer plugin: while a settings service exists it registers the namespace with the plugin's composition entry as `base`; when the service goes away the plugin falls back to its entry config and keeps working exactly as composed.
 
 ### Reading and observing values
 
@@ -97,7 +99,7 @@ This section explains the design decisions behind the service and points at the 
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Service Definition: namespace validation, registration, resolution, write queue, describe/redaction, events, `installSection` |
+| [`src/index.ts`](src/index.ts) | Service Definition: namespace brand, registration, resolution, write queue, describe/redaction, events, `installSettingsSection` |
 | [`src/redact.ts`](src/redact.ts) | `redactSecrets` walker: strip `role('secret')` fields and enumerate their slots |
 | [`src/types.ts`](src/types.ts) | Client-safe type surface: event declarations, `SettingsNamespace`, `SettingsUpdateSource` |
 | [`src/invariant.ts`](src/invariant.ts) | Invariant companion: `settings/updated` fires only for a registered namespace, only on a resolved-value change, with the authoritative value |

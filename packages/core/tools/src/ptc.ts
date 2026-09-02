@@ -6,11 +6,12 @@
  * @module @deepseek-ai/dsh-tools/src/ptc
  */
 
-import { brandString } from '@deepseek-ai/dsh-brand'
-import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { CodeBindingFunction, CodeRunResult, CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
-import { snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
+import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
+import type { JsonValue } from '@deepseek-ai/dsh-session'
+import { FIRST_PARTY_SECTION_ORDER } from '@deepseek-ai/dsh-system-prompt'
 import { defineTool, parameterSchemaSpecToJsonSchema } from './schema.ts'
 import { TOOL_RUNTIME_SCHEDULER } from './index.ts'
 import type { PtcDispatchLog, ToolDefinition, ToolExecutionResult, ToolRuntime, ToolRunContext } from './index.ts'
@@ -18,6 +19,9 @@ import type {} from './types.ts'
 
 /** The model-facing name of the PTC mode tool. */
 export const RUN_CODE_NAME = 'run_code'
+
+/** The `tools:sdk` section order, after per-tool guidance sections. */
+export const SDK_SECTION_ORDER = FIRST_PARTY_SECTION_ORDER.TOOLS_SDK
 
 /**
  * The language-specific `run_code` schema text: the tool `description` and its
@@ -466,7 +470,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         }
         const normalized = jsonNormalizeArgs(rawArgs)
         const n = ++dispatches
-        const subCallId = brandString<ToolCallId>(`${String(exec.callId)}:code:${n}`)
+        const subCallId = ToolCallId(`${String(exec.callId)}:code:${n}`)
         const input = {
           callId: subCallId,
           rootCallId: exec.rootCallId,

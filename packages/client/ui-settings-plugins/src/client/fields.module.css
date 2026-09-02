@@ -8,7 +8,7 @@
 }
 
 .field + .field {
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  border-top: 1px solid var(--dsw-alias-border-l2);
 }
 
 .head {
@@ -34,7 +34,6 @@
 
 .badge {
   border-radius: 999px;
-  corner-shape: round;
   padding: 1px 8px;
   font-size: 11px;
   line-height: 17px;
@@ -46,7 +45,6 @@
 
 .badgeMuted {
   border-radius: 999px;
-  corner-shape: round;
   padding: 1px 8px;
   font-size: 11px;
   line-height: 17px;
@@ -76,7 +74,7 @@
 .input {
   height: 34px;
   padding: 0 12px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
+  border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 8px;
   background: var(--dsw-alias-bg-layer-3);
   font: inherit;

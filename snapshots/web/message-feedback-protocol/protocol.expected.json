@@ -18,12 +18,9 @@
       "result": {
         "ok": false,
         "error": {
-          "code": "gateway/input-invalid",
+          "code": "internal",
           "message": "typert gateway: messageFeedback/put: wire field \"request\" failed boundary validation",
-          "details": {
-            "endpoint": "messageFeedback/put",
-            "field": "request"
-          }
+          "details": {}
         }
       }
     }

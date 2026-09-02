@@ -4,8 +4,6 @@
  * @module @deepseek-ai/dsh-subagent/projection-types
  */
 
-import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
-
 /** Durable active-turn timing for one descriptor-backed child session. */
 export interface SubagentTimingProjection {
   /** Milliseconds accumulated across completed turns after the child's own descriptor. */
@@ -33,11 +31,11 @@ export type SubagentIdentityProjection =
     label?: string
     /**
      * Seq of the `subagent/descriptor` event this identity was folded from.
-     * `session.isOwnSeq(seq)` proves the identity comes from the child's
+     * `seq >= header.seedLength` proves the identity comes from the child's
      * OWN log suffix — where a descriptor is immutable once appended — and
      * not from a fork seed's replayed ancestor descriptor.
      */
-    seq: SessionSeq
+    seq: number
   }
   | {
     /** A resumable conversation. */
@@ -45,7 +43,7 @@ export type SubagentIdentityProjection =
     /** Durable creation label from the child's descriptor. */
     label: string
     /** Seq of the folded descriptor event; see the one-shot arm for the own-suffix proof. */
-    seq: SessionSeq
+    seq: number
   }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {

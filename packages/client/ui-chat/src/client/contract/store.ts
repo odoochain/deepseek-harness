@@ -1,5 +1,7 @@
 /** Chat-owned selection state shared by the transcript and details panel. */
 
+import type { TurnProcessGeneration } from './turn-process.ts'
+
 /** Tool call identity as carried by Chat nodes. */
 export type ToolCallId = string
 
@@ -14,7 +16,7 @@ export interface SelectionTarget {
 /** One manually expanded Turn answer generation. */
 export interface TurnProcessViewEntry {
   readonly turn: number
-  readonly answerStep: number
+  readonly generation: TurnProcessGeneration
 }
 
 /** Per-Session state shared only by the Chat view and details surface. */

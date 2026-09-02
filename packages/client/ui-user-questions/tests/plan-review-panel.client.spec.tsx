@@ -64,15 +64,9 @@ const conversationState: ConversationState = {
   activeTargets: new Set(),
 }
 const emptyKeys: readonly string[] = []
-const emptyNodeSource = { getSnapshot: () => undefined, subscribe: () => () => {} }
 const chatState: ChatState = {
   order: emptyKeys,
-  nodes: {
-    get: () => undefined,
-    source: () => emptyNodeSource,
-    processSource: () => emptyNodeSource,
-    values: () => [],
-  },
+  nodes: { get: () => undefined, values: () => [] },
   locations: { getTurn: () => emptyKeys, getStep: () => emptyKeys },
   navigation: { items: () => [] },
   timeline: { turnOrder: [], turns: new Map() },

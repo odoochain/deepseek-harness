@@ -11,7 +11,6 @@ import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import { createUserMessage, freezeMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, UserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 // Type-only: the `title` projection key plus the live registry and durable
 // cache Context merges — the two projection faces discovery labels from.
@@ -230,12 +229,7 @@ export class SessionReferenceResolver extends TypertRemoteService {
     if (attached !== undefined && projections !== undefined) {
       return titleOf(projections.snapshot(attached, ['title']))
     }
-    if (record.header.isSeeded) return undefined
-    return titleOf(this.ctx.get('sessionProjectionCache')?.cachedSnapshot(
-      record.header,
-      SessionLogOffset(0),
-      ['title'],
-    ))
+    return titleOf(this.ctx.get('sessionProjectionCache')?.cachedSnapshot(record.header, ['title']))
   }
 
   /**

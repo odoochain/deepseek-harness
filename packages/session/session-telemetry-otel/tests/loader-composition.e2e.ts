@@ -18,7 +18,7 @@ const driver = fileURLToPath(new URL(
   import.meta.url,
 ))
 const configPath = fileURLToPath(new URL(
-  './fixtures/telemetry.patch.yml',
+  './fixtures/cordis.yml',
   import.meta.url,
 ))
 const repoTsconfig = fileURLToPath(new URL('../../../../tsconfig.json', import.meta.url))
@@ -75,7 +75,7 @@ function eventTypes(captures: OtlpCapture[]): string[] {
         : []) ?? [])
 }
 
-describe('session-telemetry-otel through the production headless profile', () => {
+describe('session-telemetry-otel through a real headless cordis.yml', () => {
   it('exports redacted ledger records to the collector while the canonical log keeps the secret', async () => {
     let output!: FixtureOutput
     const { stderr } = await runLoaderSmoke({

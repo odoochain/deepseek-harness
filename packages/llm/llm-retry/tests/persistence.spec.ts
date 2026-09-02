@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import SqliteSessionPersistence from '@deepseek-ai/dsh-session-persistence-sqlite'
 import { RetryId } from '@deepseek-ai/dsh-llm-retry'
 import type {} from '../src/index.ts'
 
@@ -14,20 +15,24 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) await rm(dir, { recursive: true, force: true })
 })
 
-async function backend(): Promise<Context> {
+async function backend(kind: 'jsonl' | 'sqlite'): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  const root = await mkdtemp(join(tmpdir(), 'dsh-llm-retry-jsonl-'))
-  dirs.push(root)
-  await ctx.plugin(JsonlSessionPersistence, { root })
+  if (kind === 'jsonl') {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-llm-retry-jsonl-'))
+    dirs.push(root)
+    await ctx.plugin(JsonlSessionPersistence, { root })
+  } else {
+    await ctx.plugin(SqliteSessionPersistence, { path: ':memory:' })
+  }
   return ctx
 }
 
-describe('JSONL retry-event persistence', () => {
+describe.each(['jsonl', 'sqlite'] as const)('%s retry-event persistence', (kind) => {
   it('round-trips the event losslessly without adding a model message', async () => {
-    const ctx = await backend()
+    const ctx = await backend(kind)
     try {
-      const session = ctx.sessions.create(SessionId('retry-jsonl'))
+      const session = ctx.sessions.create(SessionId(`retry-${kind}`))
       session.append('turn/start', { turn: 1 })
       session.append('step/start', { turn: 1, step: 1 })
       session.append('request/header', {
@@ -35,7 +40,7 @@ describe('JSONL retry-event persistence', () => {
         reason: 'initial',
       })
       const event = session.append('llm/retry', {
-        retryId: RetryId('retry-jsonl-chain'),
+        retryId: RetryId(`retry-${kind}-chain`),
         turn: 1,
         step: 1,
         provider: 'mock',

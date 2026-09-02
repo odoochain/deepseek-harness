@@ -2,7 +2,6 @@ import { Context } from '@deepseek-ai/cordis'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
 import * as BashEnvPlugin from '@deepseek-ai/dsh-shell-env'
@@ -56,7 +55,6 @@ export interface CodingHarnessOptions {
 
 export async function codingHarness(workdir: string, options: CodingHarnessOptions = {}): Promise<Context> {
   const ctx = new Context()
-  await ctx.plugin(SessionProjectionRegistry)
   await mountAgentLoopTestDependencies(ctx, {
     systemPrompt: { persona: options.persona ?? '' },
   })
@@ -96,7 +94,7 @@ export function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
   })
 }
 
-export function finalText(events: readonly SessionEvent[]): string {
+export function finalText(events: SessionEvent[]): string {
   const message = events.findLast(event => event.type === 'assistant/message')
   if (message?.type !== 'assistant/message') return ''
   return message.data.message.content

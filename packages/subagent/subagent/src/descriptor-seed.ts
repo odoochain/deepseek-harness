@@ -24,8 +24,8 @@ export function seedDescriptorTurn(
   childId: SessionId,
   seed: readonly SessionEvent[] | undefined,
   descriptor: SubagentDescriptorData,
-): readonly SessionEvent[] {
+): SessionEvent[] {
   const staged = Session.create(childId, seed)
   staged.append('subagent/descriptor', descriptor)
-  return staged.snapshotEvents()
+  return [...staged.events]
 }

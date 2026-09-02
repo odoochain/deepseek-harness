@@ -1,13 +1,10 @@
 /** Lossless range encoding for JSONL `sourceEventSeqs` arrays. */
 
-import { SessionSeq } from './types.ts'
-import type { SessionSeq as SessionSeqType } from './types.ts'
-
 /** A stored source sequence or inclusive consecutive range. */
 export type EncodedSeq = number | [number, number]
 
-function isStrictlyIncreasing(values: readonly SessionSeqType[]): boolean {
-  return values.every((value, index) => index === 0 || value > (values[index - 1] as SessionSeqType))
+function isStrictlyIncreasing(values: readonly number[]): boolean {
+  return values.every((value, index) => index === 0 || value > (values[index - 1] as number))
 }
 
 /**
@@ -15,7 +12,7 @@ function isStrictlyIncreasing(values: readonly SessionSeqType[]): boolean {
  * @param values - validated in-memory source sequences.
  * @returns a lossless JSON storage form.
  */
-export function encodeSeqRanges(values: readonly SessionSeqType[]): EncodedSeq[] {
+export function encodeSeqRanges(values: readonly number[]): EncodedSeq[] {
   if (!isStrictlyIncreasing(values)) return [...values]
   const encoded: EncodedSeq[] = []
   for (let start = 0; start < values.length;) {
@@ -34,15 +31,15 @@ export function encodeSeqRanges(values: readonly SessionSeqType[]): EncodedSeq[]
  * @param maxEntries - largest list permitted by the owning event.
  * @returns the in-memory source sequences.
  */
-export function decodeSeqRanges(value: unknown, maxEntries = Number.MAX_SAFE_INTEGER): SessionSeqType[] {
+export function decodeSeqRanges(value: unknown, maxEntries = Number.MAX_SAFE_INTEGER): number[] {
   if (!Array.isArray(value)) throw new TypeError('sourceEventSeqs must be an array')
-  const decoded: SessionSeqType[] = []
+  const decoded: number[] = []
   let hasRange = false
   for (const entry of value) {
     if (typeof entry === 'number') {
       assertSeq(entry)
       if (decoded.length >= maxEntries) throw new TypeError('sourceEventSeqs exceeds its event sequence')
-      decoded.push(SessionSeq(entry))
+      decoded.push(entry)
       continue
     }
     if (!Array.isArray(entry) || entry.length !== 2) {
@@ -57,7 +54,7 @@ export function decodeSeqRanges(value: unknown, maxEntries = Number.MAX_SAFE_INT
     if (length > maxEntries - decoded.length) {
       throw new TypeError('sourceEventSeqs range exceeds its event sequence')
     }
-    for (let seq = start; seq <= end; seq += 1) decoded.push(SessionSeq(seq))
+    for (let seq = start; seq <= end; seq += 1) decoded.push(seq)
     hasRange = true
   }
   if (hasRange && !isStrictlyIncreasing(decoded)) {

@@ -14,14 +14,12 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SubprocessHandle } from '@deepseek-ai/dsh-subprocess'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as claudeCode from '../src/index.ts'
 
 const execFileAsync = promisify(execFile)
 const OFFICIAL_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
-const DEEPSEEK_MODEL = 'deepseek-v4-flash'
 const sdkRoot = dirname(fileURLToPath(
   import.meta.resolve('@anthropic-ai/claude-agent-sdk'),
 ))
@@ -91,11 +89,11 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)(
       const env = {
         ANTHROPIC_AUTH_TOKEN: apiKey,
         ANTHROPIC_BASE_URL: `${deepSeekBaseUrl()}/anthropic`,
-        ANTHROPIC_MODEL: DEEPSEEK_MODEL,
-        ANTHROPIC_DEFAULT_OPUS_MODEL: DEEPSEEK_MODEL,
-        ANTHROPIC_DEFAULT_SONNET_MODEL: DEEPSEEK_MODEL,
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: DEEPSEEK_MODEL,
-        CLAUDE_CODE_SUBAGENT_MODEL: DEEPSEEK_MODEL,
+        ANTHROPIC_MODEL: 'deepseek-v4-pro[1m]',
+        ANTHROPIC_DEFAULT_OPUS_MODEL: 'deepseek-v4-pro[1m]',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'deepseek-v4-pro[1m]',
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-v4-flash',
+        CLAUDE_CODE_SUBAGENT_MODEL: 'deepseek-v4-flash',
         CLAUDE_CODE_EFFORT_LEVEL: 'max',
         CLAUDE_CONFIG_DIR: claudeConfig,
         HOME: root,
@@ -114,7 +112,6 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)(
       }
       const ctx = new Context()
       contexts.push(ctx)
-      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(SubagentRuntime)
       await ctx.plugin(LocalSubprocessRuntime)
       const handles: SubprocessHandle[] = []

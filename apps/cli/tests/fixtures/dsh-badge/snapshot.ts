@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { Context } from '@deepseek-ai/cordis'
 import { agentEvents, Inbox, type Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { boot, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
@@ -19,7 +20,7 @@ try {
   const agentId = SessionId('dsh-badge-snapshot')
   const session = ctx.sessions.create(agentId, { meta: { cwd: process.cwd() } })
   const agent: Agent = {
-    ctx,
+    ctx: new Context(),
     id: agentId,
     options: {},
     session,

@@ -8,9 +8,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore from '@deepseek-ai/dsh-session'
 import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import {
   SessionQueryEngine,
   SessionQueryError,
@@ -32,7 +31,6 @@ function header(id: string, cwd: string | null = '/project'): SessionHeader {
     version: 0,
     id: sid(id),
     createdAt: 100,
-    isSeeded: false,
     ...(cwd === null ? {} : { cwd }),
   }
 }
@@ -45,7 +43,7 @@ function hit(id: string, index = 0): SessionSearchHit {
     persisted: false,
     bestMatch: {
       sessionId: session.id,
-      seq: SessionSeq(index),
+      seq: index,
       type: 'user/message',
       time: 200 + index,
       surface: 'current',
@@ -58,7 +56,6 @@ async function baseContext(): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(AgentRegistry)
-  await ctx.plugin(SessionProjectionRegistry)
   return ctx
 }
 
@@ -99,7 +96,7 @@ describe('session.search', () => {
     const list = new ApiSessionList(ctx, 0)
 
     await expect(list.search('query', new AbortController().signal)).rejects.toMatchObject({
-      code: 'gateway/internal',
+      failure: { code: 'internal' },
     })
     await ctx.fiber.dispose()
   })
@@ -192,7 +189,7 @@ describe('session.search', () => {
 
     for (const query of ['', '   ', 'contains\0nul', 'x'.repeat(501)]) {
       await expect(remote.search(request(query), new AbortController().signal))
-        .resolves.toMatchObject({ ok: false, error: { code: 'gateway/bad-request' } })
+        .resolves.toMatchObject({ ok: false, error: { code: 'bad-request' } })
     }
     expect(searchSessions).not.toHaveBeenCalled()
     await ctx.fiber.dispose()
@@ -354,7 +351,7 @@ describe('session.search', () => {
 
     expect(response.ok).toBe(false)
     if (response.ok) throw new Error('unreachable')
-    expect(response.error).toMatchObject({ code: 'gateway/internal' })
+    expect(response.error).toMatchObject({ code: 'internal' })
     expect(response.error.message).toContain('100-call work budget')
     expect(searchSessions).toHaveBeenCalledTimes(100)
   })
@@ -458,7 +455,7 @@ describe('session.search', () => {
 
     expect(response.ok).toBe(false)
     if (response.ok) throw new Error('unreachable')
-    expect(response.error.code).toBe('gateway/internal')
+    expect(response.error.code).toBe('internal')
     expect(response.error.message).toContain('100-call work budget')
     expect(response).not.toHaveProperty('value')
     expect(searchSessions).toHaveBeenCalledTimes(100)
@@ -487,7 +484,7 @@ describe('session.search', () => {
 
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'gateway/cancelled' },
+      error: { code: 'cancelled' },
     })
     expect(searchSessions).toHaveBeenCalledTimes(2)
   })
@@ -508,7 +505,7 @@ describe('session.search', () => {
 
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'gateway/internal' },
+      error: { code: 'internal' },
     })
     expect(response).not.toHaveProperty('value')
     expect(searchSessions).toHaveBeenCalledOnce()
@@ -532,7 +529,7 @@ describe('session.search', () => {
 
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'gateway/internal' },
+      error: { code: 'internal' },
     })
     expect(searchSessions).toHaveBeenCalledTimes(2)
     expect(searchSessions.mock.calls.map(([providerRequest]) => (
@@ -559,7 +556,7 @@ describe('session.search', () => {
 
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'gateway/internal' },
+      error: { code: 'internal' },
     })
     expect(searchSessions.mock.calls.map(([providerRequest]) => providerRequest.limit))
       .toEqual([20, 10, 5, 2, 1])
@@ -585,7 +582,7 @@ describe('session.search', () => {
 
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'gateway/cancelled' },
+      error: { code: 'cancelled' },
     })
     expect(searchSessions).toHaveBeenCalledOnce()
   })
@@ -604,7 +601,7 @@ describe('session.search', () => {
 
     expect(response.ok).toBe(false)
     if (response.ok) throw new Error('unreachable')
-    expect(response.error).toMatchObject({ code: 'gateway/internal' })
+    expect(response.error).toMatchObject({ code: 'internal' })
     expect(response.error.message).toContain('returned 21 items; maximum is 20')
   })
 
@@ -630,7 +627,7 @@ describe('session.search', () => {
 
     expect(response.ok).toBe(false)
     if (response.ok) throw new Error('unreachable')
-    expect(response.error).toMatchObject({ code: 'gateway/internal' })
+    expect(response.error).toMatchObject({ code: 'internal' })
     expect(response.error.message).toContain('returned 11 items; maximum is 10')
     expect(searchSessions).toHaveBeenCalledTimes(2)
   })
@@ -678,7 +675,7 @@ describe('session.search', () => {
 
     expect(response.ok).toBe(false)
     if (response.ok) throw new Error('unreachable')
-    expect(response.error).toMatchObject({ code: 'gateway/internal' })
+    expect(response.error).toMatchObject({ code: 'internal' })
     expect(response.error.message).toContain('repeated a continuation cursor')
     expect(searchSessions).toHaveBeenCalledTimes(2)
   })
@@ -701,7 +698,7 @@ describe('session.search', () => {
 
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'gateway/internal' },
+      error: { code: 'internal' },
     })
     expect(response).not.toHaveProperty('value')
     if (response.ok) throw new Error('unreachable')
@@ -756,7 +753,7 @@ describe('session.search', () => {
 
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'gateway/cancelled' },
+      error: { code: 'cancelled' },
     })
     expect(searchSessions).toHaveBeenCalledTimes(2)
     for (const call of searchSessions.mock.calls) {
@@ -822,7 +819,7 @@ describe('session.search', () => {
 
     expect(response).toMatchObject({
       ok: false,
-      error: { code: 'gateway/cancelled' },
+      error: { code: 'cancelled' },
     })
     expect(list).toHaveBeenCalledOnce()
     expect(locateCalls).toBe(0)
@@ -864,7 +861,7 @@ describe('session.search', () => {
     )
     expect(cancelledBeforeLookup).toMatchObject({
       ok: false,
-      error: { code: 'gateway/cancelled' },
+      error: { code: 'cancelled' },
     })
 
     const ctx = await baseContext()
@@ -882,7 +879,7 @@ describe('session.search', () => {
     )
     expect(cancelled).toMatchObject({
       ok: false,
-      error: { code: 'gateway/cancelled' },
+      error: { code: 'cancelled' },
     })
 
     const failed = await remote.search(
@@ -891,7 +888,7 @@ describe('session.search', () => {
     )
     expect(failed.ok).toBe(false)
     if (failed.ok) throw new Error('unreachable')
-    expect(failed.error.code).toBe('gateway/internal')
+    expect(failed.error.code).toBe('internal')
     expect(failed.error.message).toContain('database unavailable')
   })
 })

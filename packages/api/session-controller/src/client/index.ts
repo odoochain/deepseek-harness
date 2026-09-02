@@ -2,6 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent/types'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import { createSessionControlStream } from './transport.ts'
 import { ClientSessions } from './sessions/service.ts'
 import type { SessionRemotes } from './sessions/remotes.ts'
@@ -12,6 +13,7 @@ export {
   SessionEventStream,
   SESSION_SEARCH_RESULT_LIMIT,
   SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
+  sessionStreamFailure,
 } from './transport.ts'
 export type {
   ClientSessionPageRequest,
@@ -60,11 +62,11 @@ export type {
   OpenState,
   PendingSubmission,
   PendingSubmissionImage,
-  PendingSubmissionPlacement,
   PromptError,
   QueuedMessage,
   SessionSnapshot,
 } from './contract/snapshot.ts'
+export type { ClientFailure, ClientResult } from './contract/result.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -73,8 +75,9 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Required Remote and Context projection services. */
+/** Required wire, Remote, and Context projection services. */
 export const inject = [
+  'connection',
   'typert',
   'remote',
   'remote.commands',
@@ -87,6 +90,7 @@ export const inject = [
  * @param ctx - Client Cordis context.
  */
 export function apply(ctx: Context): void {
+  const connection = ctx.get('connection') as ConnectionHandle
   const remotes = ctx.remote as unknown as SessionRemotes
   const sessions = new ClientSessions(ctx, remotes)
   ctx.remote.$on('api-session/added', (summary) => { sessions.handleSessionAdded(summary) })
@@ -107,7 +111,7 @@ export function apply(ctx: Context): void {
   })
   control.start()
   ctx.on('connection/reset', () => { sessions.handleConnected() })
-  if (ctx.remote.$host.home !== undefined) sessions.handleConnected()
+  if (connection.generation.getSnapshot() !== undefined) sessions.handleConnected()
   ctx.typert.contexts.registerClient('agent', {
     identity: candidate => sessions.scopeOf(candidate),
     resolve: sessionId => sessions.resolveAgentScope(sessionId),

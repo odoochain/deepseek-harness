@@ -1,6 +1,10 @@
 import type { SessionEventLike } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 
+/* oxlint-disable typescript/no-duplicate-type-constituents, typescript/no-redundant-type-constituents --
+ * The unaugmented declaration-merge maps intentionally resolve to never in the Runtime program;
+ * installed business packages supply their concrete keys in consuming Client programs. */
+
 /** Definition-local identity and lifecycle role extracted from one event. */
 export interface ConversationMatchResult {
   readonly id: string
@@ -13,14 +17,6 @@ export interface ConversationTurnDataMap {}
 /** Merge-extensible business values published against one Step. */
 export interface ConversationStepDataMap {}
 
-/** Observable value for one independently owned Location-data key. */
-export interface ConversationLocationDataSource<Value> {
-  /** @returns the current value. */
-  readonly getSnapshot: () => Value
-  /** @param listener - callback for value changes. @returns the unsubscribe function. */
-  readonly subscribe: (listener: () => void) => () => void
-}
-
 /** Stable keyed reader for independently owned Location business values. */
 export interface ConversationLocationDataStore<DataMap extends object> {
   /**
@@ -29,14 +25,6 @@ export interface ConversationLocationDataStore<DataMap extends object> {
    * @returns latest immutable value, when its owning Context has published one.
    */
   get<Key extends keyof DataMap & string>(key: Key): Readonly<DataMap[Key]> | undefined
-  /**
-   * Observe one business value without subscribing to unrelated Location keys.
-   * @param key - declaration-merged business key.
-   * @returns identity-stable source for the current value.
-   */
-  source<Key extends keyof DataMap & string>(
-    key: Key,
-  ): ConversationLocationDataSource<Readonly<DataMap[Key]> | undefined>
 }
 
 interface ConversationLocationDataValue {
@@ -47,35 +35,30 @@ interface ConversationLocationDataValue {
   readonly value: unknown
 }
 
-type RegisteredTurnData<DataMap extends object> = {
-  [Key in Extract<keyof DataMap, string>]: {
+type RegisteredTurnData = {
+  [Key in keyof ConversationTurnDataMap & string]: {
     readonly kind: 'turn'
     readonly turn: number
     readonly key: Key
-    readonly value: DataMap[Key]
+    readonly value: ConversationTurnDataMap[Key]
   }
-}[Extract<keyof DataMap, string>]
+}[keyof ConversationTurnDataMap & string]
 
-type RegisteredStepData<DataMap extends object> = {
-  [Key in Extract<keyof DataMap, string>]: {
+type RegisteredStepData = {
+  [Key in keyof ConversationStepDataMap & string]: {
     readonly kind: 'step'
     readonly turn: number
     readonly step: number
     readonly key: Key
-    readonly value: DataMap[Key]
+    readonly value: ConversationStepDataMap[Key]
   }
-}[Extract<keyof DataMap, string>]
-
-type ConversationLocationDataOf<TurnData extends object, StepData extends object> =
-  [keyof TurnData | keyof StepData] extends [never]
-    ? ConversationLocationDataValue
-    : RegisteredTurnData<TurnData> | RegisteredStepData<StepData>
+}[keyof ConversationStepDataMap & string]
 
 /** One Definition-owned value attached to an Engine-owned Turn or Step. */
-export type ConversationLocationData = ConversationLocationDataOf<
-  ConversationTurnDataMap,
-  ConversationStepDataMap
->
+export type ConversationLocationData =
+  [keyof ConversationTurnDataMap | keyof ConversationStepDataMap] extends [never]
+    ? ConversationLocationDataValue
+    : RegisteredTurnData | RegisteredStepData
 
 /** Immutable resolved boundary for one Agent step. */
 export interface StepLocation {
@@ -175,7 +158,7 @@ export interface ConversationContextReader {
   previous<State>(kind: string): ConversationPreviousContext<State> | undefined
 }
 
-/** Requested cadence; `animation-frame` materializes after three browser animation frames. */
+/** Requested cadence for materializing updated business State into view Nodes. */
 export type ConversationPublication = 'none' | 'animation-frame' | 'immediate'
 
 /** Engine-owned Location data publication phase. */
@@ -227,14 +210,11 @@ export interface ConversationNodeDefinition<State = unknown> {
    * the same Location key.
    * @param context - latest complete Context.
    * @param scope - Location hierarchy level currently being materialized.
-   * @param previous - value from the preceding materialization; return it when unchanged.
-   * @returns current Location value, preserving value identity while unchanged,
-   * or null while unavailable.
+   * @returns current Location value, or null while unavailable.
    */
   buildLocationData?(
     context: ConversationNodeContext<State>,
     scope: ConversationLocationDataScope,
-    previous: ConversationLocationData | null,
   ): ConversationLocationData | null
   /**
    * Materialize one final Node for this Definition's declared view target.
@@ -273,7 +253,7 @@ export interface ConversationViewBuilder<Node extends ConversationViewNode = Con
   }): Snapshot
 }
 
-/** Registry contribution that creates an isolated builder when a Session first uses this target. */
+/** Registry contribution that creates one isolated view builder per Session. */
 export interface ConversationViewDefinition<Node extends ConversationViewNode = ConversationViewNode, Snapshot = unknown> {
   readonly target: string
   /** @returns a new Session-owned incremental builder. */

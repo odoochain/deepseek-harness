@@ -5,7 +5,6 @@
 import { z } from 'zod'
 import type { TokenUsage } from '@deepseek-ai/dsh-llm'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
-import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type { ContextPressureProjection, TokenUsageProjection } from './projection.ts'
@@ -100,8 +99,8 @@ const contextPressureStateSchema = z.object({
   surfaceTokens: z.number().int().nonnegative(),
   sampledSurfaceTokens: z.number().int().nonnegative().optional(),
   claim: z.object({
-    start: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq),
-    end: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq),
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
     tokens: z.number().int().nonnegative(),
   }).optional(),
 }).strict()

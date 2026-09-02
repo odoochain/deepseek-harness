@@ -6,9 +6,7 @@ import { useState } from 'react'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
-import {
-  RemoteError, SlotTestRuntime, usePinnedBrowserLanguages, stubSettingsScope,
-} from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotTestRuntime, usePinnedBrowserLanguages, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import { InputHub } from '../src/client/input/hub.ts'
 import { apply, inject, type EmptyWorkspaceOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -180,8 +178,7 @@ describe('prompt rejection through the assembled composer', () => {
     runtime.ctx.provide('locale', locale)
     runtime.slots.installLocale(locale)
     const prompt = vi.fn<ISession['prompt']>(async () => ({
-      ok: false,
-      error: new RemoteError('session/agent-busy', 'prompt rejected before acceptance', { reason: 'busy' }),
+      ok: false, error: { code: 'agent-busy', message: 'prompt rejected before acceptance', details: { reason: 'busy' } },
     }))
     await runtime.sessions.add({
       id: SID,
@@ -204,11 +201,11 @@ describe('prompt rejection through the assembled composer', () => {
     await runtime.sessions.updateSessionSnapshot(SID, (draft) => {
       draft.promptError = {
         op: 'send',
-        error: new RemoteError('session/agent-busy', 'prompt rejected before acceptance', { reason: 'busy' }),
+        error: { code: 'agent-busy', message: 'prompt rejected before acceptance', details: { reason: 'busy' } },
       }
     })
     const alert = await view.findByRole('alert')
-    expect(alert.textContent).toContain('prompt rejected before acceptance (session/agent-busy)')
+    expect(alert.textContent).toContain('prompt rejected before acceptance (agent-busy)')
     await waitFor(() => {
       expect(shell.snapshot.draft).toBe('do not lose this')
     })

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import InvariantRegistry, { InvariantError } from '@deepseek-ai/dsh-invariants'
-import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import * as SessionLogInvariant from '../src/invariant.ts'
 import type {} from '../src/types.ts'
 
@@ -25,7 +25,7 @@ describe('DeepSeek session-log acceptance invariant', () => {
     const ctx = await setup()
     const session = ctx.sessions.create(SessionId('valid'))
     session.append('turn/start', { turn: 1 })
-    expect(() => session.append('session-log-deepseek/delivery-accepted', { sessionId: session.id, throughSeq: SessionSeq(0) }))
+    expect(() => session.append('session-log-deepseek/delivery-accepted', { sessionId: session.id, throughSeq: 0 }))
       .not.toThrow()
   })
 
@@ -35,7 +35,7 @@ describe('DeepSeek session-log acceptance invariant', () => {
     wrongId.append('turn/start', { turn: 1 })
     expect(() => wrongId.append('session-log-deepseek/delivery-accepted', {
       sessionId: SessionId('other'),
-      throughSeq: SessionSeq(0),
+      throughSeq: 0,
     })).toThrow(expect.objectContaining<Partial<InvariantError>>({
       code: 'INVARIANT',
       packageName: '@deepseek-ai/dsh-session-log-deepseek',
@@ -45,14 +45,7 @@ describe('DeepSeek session-log acceptance invariant', () => {
     wrongSeq.append('turn/start', { turn: 1 })
     expect(() => wrongSeq.append('session-log-deepseek/delivery-accepted', {
       sessionId: wrongSeq.id,
-      throughSeq: SessionSeq(1),
-    })).toThrow(expect.objectContaining<Partial<InvariantError>>({
-      code: 'INVARIANT',
-      packageName: '@deepseek-ai/dsh-session-log-deepseek',
-    }))
-    expect(() => wrongSeq.append('session-log-deepseek/delivery-accepted', {
-      sessionId: wrongSeq.id,
-      throughSeq: -1 as never,
+      throughSeq: 1,
     })).toThrow(expect.objectContaining<Partial<InvariantError>>({
       code: 'INVARIANT',
       packageName: '@deepseek-ai/dsh-session-log-deepseek',
@@ -66,13 +59,8 @@ describe('DeepSeek session-log acceptance invariant', () => {
     await ctx.plugin(InvariantRegistry, { enabled: true })
     const id = SessionId('late-invalid')
     ctx.sessions.create(id, { seed: [
-      { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
-      {
-        type: 'session-log-deepseek/delivery-accepted',
-        seq: SessionSeq(1),
-        time: 2,
-        data: { sessionId: id, throughSeq: SessionSeq(1) },
-      },
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'session-log-deepseek/delivery-accepted', seq: 1, time: 2, data: { sessionId: id, throughSeq: 1 } },
     ] })
 
     let failure: unknown
@@ -96,16 +84,10 @@ describe('DeepSeek session-log acceptance invariant', () => {
     const childId = SessionId('fork-child')
     ctx.sessions.create(childId, {
       seed: [
-        { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
-        {
-          type: 'session-log-deepseek/delivery-accepted',
-          seq: SessionSeq(1),
-          time: 2,
-          data: { sessionId: parentId, throughSeq: SessionSeq(0) },
-        },
+        { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+        { type: 'session-log-deepseek/delivery-accepted', seq: 1, time: 2, data: { sessionId: parentId, throughSeq: 0 } },
       ],
-      inheritedEventCount: SessionLogOffset(2),
-      meta: { parentSession: parentId, isSeeded: true },
+      meta: { parentSession: parentId, seedLength: 2 },
     })
 
     await expect(ctx.plugin(SessionLogInvariant)).resolves.toBeDefined()

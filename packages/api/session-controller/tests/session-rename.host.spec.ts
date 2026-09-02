@@ -10,7 +10,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -27,7 +26,6 @@ function request<P>(payload: P): P {
 async function composed(withTitles = true): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentRegistry)
   if (withTitles) {
     await ctx.plugin(SessionTitleService, { fallbackMaxWords: 5, fallbackMaxBytes: 40, maxTitleBytes: 40 })
@@ -76,7 +74,7 @@ describe('sessions.rename', () => {
     expect(renamed.ok).toBe(true)
     if (!renamed.ok) return
     expect(renamed.value.title).toBe('new name')
-    const event = source.snapshotEvents().findLast(item => item.type === 'session/title')
+    const event = source.events.findLast(item => item.type === 'session/title')
     expect(event?.seq).toBe(renamed.value.seq)
     expect(event?.data).toMatchObject({ title: 'new name', source: { kind: 'user' } })
   })
@@ -90,7 +88,7 @@ describe('sessions.rename', () => {
     expect(response.ok).toBe(false)
     if (!response.ok) {
       expect(response.error).toMatchObject({
-        code: 'session/title-invalid',
+        code: 'title-invalid',
         details: { sessionId: source.id },
       })
       // The message renders verbatim in the rename dialog's alert.
@@ -109,7 +107,7 @@ describe('sessions.rename', () => {
 
     const response = await remote(ctx).rename(request({ sessionId: stale.id, title: 'name' }))
     expect(response.ok).toBe(false)
-    if (!response.ok) expect(response.error.code).toBe('gateway/internal')
+    if (!response.ok) expect(response.error.code).toBe('internal')
   })
 
   it('answers internal when the composition mounts no session-title service', async () => {
@@ -119,7 +117,7 @@ describe('sessions.rename', () => {
     const response = await remote(ctx).rename(request({ sessionId: source.id, title: 'name' }))
     expect(response.ok).toBe(false)
     if (!response.ok) {
-      expect(response.error.code).toBe('gateway/internal')
+      expect(response.error.code).toBe('internal')
       expect(response.error.message).toMatch(/mounts no session-title service/)
     }
   })

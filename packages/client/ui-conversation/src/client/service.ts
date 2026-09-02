@@ -207,8 +207,7 @@ export class ConversationController extends Service implements IConversation {
     if (attachments.length !== imageIds.length) {
       throw new Error('conversation.sendSession: one or more draft images are no longer available')
     }
-    const snapshot = session.getSnapshot()
-    if (snapshot.subagent !== null) {
+    if (session.getSnapshot().subagent !== null) {
       const uploaded = await this.serializeImages(attachments.map(attachment => attachment.file))
       const content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
       const result = await session.prompt(content, mode, signal)
@@ -219,7 +218,6 @@ export class ConversationController extends Service implements IConversation {
       ? undefined
       : new Promise<PendingSubmissionRetirement>((resolve) => { finishRetirement = resolve })
     const submission = session.beginSubmission({
-      mode,
       text,
       images: attachments.map(attachment => ({
         previewUrl: attachment.previewUrl,
@@ -317,7 +315,7 @@ export class ConversationController extends Service implements IConversation {
     if (!result.ok) {
       if (
         action.kind === 'steer'
-        && (result.error.code === 'session/steer-unavailable' || result.error.code === 'session/queue-item-not-found')
+        && (result.error.code === 'steer-unavailable' || result.error.code === 'queue-item-not-found')
       ) return
       throw new Error(`conversation.updateQueue failed: ${result.error.code}: ${result.error.message}`)
     }

@@ -10,13 +10,11 @@
  * deployment default again, matching the workspace picker beside it.
  */
 
-import type { Context as ClientContext } from '@deepseek-ai/cordis'
-// Type-only: pulls the ctx.remote merge into this program.
-import type {} from '@deepseek-ai/dsh-api-remotes/client'
+import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionSummary } from '@deepseek-ai/dsh-api-session-controller/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
-import { presetOptions, readRoster } from './settings-store.ts'
+import { messageOf, presetOptions, readRoster } from './settings-store.ts'
 import type { AgentPresetOption } from './settings-store.ts'
 
 /** Hero-chip snapshot. */
@@ -55,7 +53,7 @@ export class AgentPresetSeatController {
   private staged: string | undefined
 
   constructor(
-    private readonly ctx: ClientContext,
+    private readonly remote: Pick<ClientRemote, 'agentPresets'>,
     /** The session the hero is about to hand over to, when there is one. */
     private readonly currentSession: () => Pick<
       SessionSummary,
@@ -72,7 +70,7 @@ export class AgentPresetSeatController {
   * @returns once the snapshot reflects the host.
   */
   async load(): Promise<void> {
-    const roster = await readRoster(this.ctx)
+    const roster = await readRoster(this.remote)
     if (!roster.ok) {
       this.set({ error: roster.error })
       return
@@ -157,26 +155,35 @@ export class AgentPresetSeatController {
       return
     }
     this.set({ busy: true, error: null })
-    const result = await this.ctx.remote.agentPresets.select(session.id, staged)
-    this.staged = undefined
-    if (!result.ok) {
-      const { error } = result
+    try {
+      const result = await this.remote.agentPresets.select(session.id, staged)
+      this.staged = undefined
+      if (!result.ok) {
+        const { error } = result
+        this.set({
+          busy: false,
+          // A refusal carries its cause twice: `message` wraps it in the
+          // roster's own frame, which names the preset the surface reporting
+          // this already names, and a `reason` detail holds the same cause
+          // without it. Read by the detail rather than by the code, because
+          // every refusal that has a cause to give names it the same way.
+          error: 'reason' in error.details && typeof error.details.reason === 'string'
+            ? error.details.reason
+            : error.message,
+          current: presetOf(session) ?? '',
+        })
+        return
+      }
+      // Consumed: the next new session opens on the deployment default again.
+      this.set({ busy: false, current: result.value })
+    } catch (error) {
+      this.staged = undefined
       this.set({
         busy: false,
-        // A refusal carries its cause twice: `message` wraps it in the
-        // roster's own frame, which names the preset the surface reporting
-        // this already names, and a `reason` detail holds the same cause
-        // without it. Read by the detail rather than by the code, because
-        // every refusal that has a cause to give names it the same way.
-        error: 'reason' in error.details && typeof error.details.reason === 'string'
-          ? error.details.reason
-          : error.message,
+        error: messageOf(error),
         current: presetOf(session) ?? '',
       })
-      return
     }
-    // Consumed: the next new session opens on the deployment default again.
-    this.set({ busy: false, current: result.value })
   }
 }
 

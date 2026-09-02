@@ -93,9 +93,9 @@ const ToolCallBranch = memo(function ToolCallBranch({
  * @returns the Tool call tree.
  */
 export function ToolCallTree({
-  renderSlot, node, selectedCallId, cwd, openFile, inspectCall, useHostInfo, t,
+  renderSlot, node, selectedCallId, cwd, openFile, inspectCall, useConnectionGeneration, t,
 }: ToolTreeProps) {
-  const home = useHostInfo(info => info.home)
+  const home = useConnectionGeneration(generation => generation?.host.home)
   const block = node.data.root
   return (
     <ToolCallBranch

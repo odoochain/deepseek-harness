@@ -83,7 +83,7 @@ The executor is the sandboxing Service Provider for the `ctx.shell` seam: it inh
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SandboxBashExecutor`, per-process fact retention, run/start wrapping |
 | [`src/helpers.ts`](src/helpers.ts) | Denial, runner-failure, and runner-spawn-failure classification |
-| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
+| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; classification is observable in results) |
 | `tests/` | Exercised behavior across the bwrap, Landlock, and Seatbelt runners |
 
 ### Main flow

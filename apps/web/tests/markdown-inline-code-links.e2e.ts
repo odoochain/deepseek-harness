@@ -73,7 +73,7 @@ function markdownFixture(linkUrl: string): string {
       createdAt: 0,
       cwd: '{{cwd}}',
     }),
-    ...session.snapshotEvents().map(event => JSON.stringify({
+    ...session.events.map(event => JSON.stringify({
       ...event,
       time: eventTimeOrigin + event.seq * 1_000,
     })),

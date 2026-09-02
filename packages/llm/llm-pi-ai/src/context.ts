@@ -4,9 +4,8 @@
  * @module dsh-llm-pi-ai/context
  */
 
-import { brandString } from '@deepseek-ai/dsh-brand'
-import { contentHasImage, LlmError, offloadedImageText, offloadRequestImagesWithPolicy, requestImageHandleText } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver, Message, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, contentHasImage, LlmError, offloadedImageText, offloadRequestImagesWithPolicy, requestImageHandleText } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver, Message } from '@deepseek-ai/dsh-llm'
 import type {
   AttachmentId,
   AttachmentStore,
@@ -138,19 +137,6 @@ function piContext(options: GenerateOptions, messages: PiMessage[]): PiContext {
   }
 }
 
-function appendAssistant(
-  message: Message,
-  messages: PiMessage[],
-  toolNames: Map<ToolCallId, string>,
-  onReplayDegrade?: (reason: string) => void,
-): void {
-  const assistant = toPiAssistant(message, onReplayDegrade)
-  for (const block of assistant.content) {
-    if (block.type === 'toolCall') toolNames.set(brandString<ToolCallId>(block.id), block.name)
-  }
-  messages.push(assistant)
-}
-
 function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: string) => void): PiContext {
   const toolNames = new Map<ToolCallId, string>()
   const messages: PiMessage[] = []
@@ -163,7 +149,9 @@ function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: st
       continue
     }
     if (message.role === 'assistant') {
-      appendAssistant(message, messages, toolNames, onReplayDegrade)
+      const assistant = toPiAssistant(message, onReplayDegrade)
+      for (const block of assistant.content) if (block.type === 'toolCall') toolNames.set(ToolCallId(block.id), block.name)
+      messages.push(assistant)
       continue
     }
     const text = flattenText(message)
@@ -275,7 +263,11 @@ async function toPiContextWithImages(
       continue
     }
     if (message.role === 'assistant') {
-      appendAssistant(message, messages, toolNames, onReplayDegrade)
+      const assistant = toPiAssistant(message, onReplayDegrade)
+      for (const block of assistant.content) {
+        if (block.type === 'toolCall') toolNames.set(ToolCallId(block.id), block.name)
+      }
+      messages.push(assistant)
       continue
     }
     // user role: text + tool results (each result becomes its own message).

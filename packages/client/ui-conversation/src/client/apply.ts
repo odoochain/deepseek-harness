@@ -16,7 +16,7 @@ import type {
   ConversationSessionInjected,
 } from './contract/slots.ts'
 import type { InputNotice } from './contract/input.ts'
-import { createConversationStore, readConversationViewPreference } from './stores.ts'
+import { createConversationStore } from './stores.ts'
 import { ConversationController, UnsupportedImageMediaTypeError } from './service.ts'
 import type { IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
@@ -30,7 +30,6 @@ import { ConversationRoot } from './skeleton/ConversationRoot.tsx'
 import { ConversationSession, ConversationSessionHeader } from './skeleton/ConversationSession.tsx'
 import { InputBar } from './skeleton/InputBar.tsx'
 import { todoDockEntry } from './skeleton/TodoPanel.tsx'
-import { resolveActiveView } from './view-selection.ts'
 import { en, NS, zh, type ConversationKey } from './locales.ts'
 import { CONVERSATION_SETTINGS_NAMESPACE, type ConversationSettings } from '../submission-settings.ts'
 
@@ -130,47 +129,25 @@ export function apply(ctx: Context): void {
     }
     return tabs
   }
-  const activateView = (sessionId: SessionId, preferred: string | null): void => {
-    const active = resolveActiveView(viewTabs(), preferred)
-    if (active !== undefined) uiConversation.binding(sessionId).activate(active.id)
-  }
-  const restoreView = (sessionId: SessionId): void => {
-    activateView(sessionId, readConversationViewPreference(sessionId))
-  }
-  const restoreCurrentView = (): void => {
-    const sessionId = sessions.list.getSnapshot().current
-    if (sessionId !== undefined && sessions.binding(sessionId) !== undefined) {
-      restoreView(sessionId)
-    }
-  }
   const conversationViews = createSnapshotStore<readonly ViewTab[]>(viewTabs())
   const refreshViews = (): void => {
     const current = conversationViews.getSnapshot()
     const next = viewTabs()
-    const unchanged = current.length === next.length
+    if (current.length === next.length
       && current.every((tab, index) => {
         const candidate = next.at(index)
         return candidate !== undefined && tab.id === candidate.id && tab.label === candidate.label
-      })
-    if (!unchanged) conversationViews.set(next)
-    restoreCurrentView()
+      })) return
+    conversationViews.set(next)
   }
   ctx.effect(() => {
-    let currentSessionId = sessions.list.getSnapshot().current
     const disposeViews = slots.subscribe('conversation.view', refreshViews)
     const disposeLocale = ctx.locale.subscribe(refreshViews)
-    const disposeCurrent = sessions.list.subscribe(() => {
-      const nextSessionId = sessions.list.getSnapshot().current
-      if (nextSessionId === currentSessionId) return
-      currentSessionId = nextSessionId
-      restoreCurrentView()
-    })
     return () => {
-      disposeCurrent()
       disposeLocale()
       disposeViews()
     }
-  }, 'ui-conversation: View selection')
+  }, 'ui-conversation: View roster')
 
   const inputHub = new InputHub(ctx, t)
   const composerBlocks = new ComposerBlockRegistry()
@@ -182,11 +159,9 @@ export function apply(ctx: Context): void {
     props: ['inputActions'],
     resolve: (binding) => {
       const shell = inputHub.shellFor(binding)
-      const conversation = uiConversation.binding(binding)
-      restoreView(binding.sessionId)
       return {
         hooks: {
-          conversation: conversation.snapshot,
+          conversation: uiConversation.binding(binding).snapshot,
           input: shell.state,
         },
         props: { inputActions: shell.actions },
@@ -202,7 +177,11 @@ export function apply(ctx: Context): void {
       'conversation.session.header': { kind: 'single', scope: 'session' },
       'conversation.composer': { kind: 'chain', scope: 'session' },
       'conversation.composer.bar': { kind: 'single', scope: 'session-maybe' },
+      'conversation.input.overlay': { kind: 'list', scope: 'session' },
       'conversation.input.dock': { kind: 'list', scope: 'session' },
+      'conversation.composer.dock': { kind: 'list', scope: 'session' },
+      'conversation.input.left': { kind: 'list', scope: 'session' },
+      'conversation.input.right': { kind: 'list', scope: 'session' },
       'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
@@ -239,13 +218,9 @@ export function apply(ctx: Context): void {
       'conversation.view': { kind: 'list', scope: 'session' },
     },
     store: conversationStore,
-    inject: (sessionId: SessionId, actions: BoundActions<typeof conversationStore>): ConversationSessionInjected => ({
+    inject: (sessionId: SessionId, _actions: BoundActions<typeof conversationStore>): ConversationSessionInjected => ({
       hooks: { conversationViews },
       bindDraftMirror: write => inputHub.shell(sessionId).bindMirror(write),
-      openView: (view, focus) => {
-        activateView(sessionId, view)
-        actions.openView(view, focus)
-      },
     }),
   }, ConversationSession)
 
@@ -258,13 +233,9 @@ export function apply(ctx: Context): void {
       'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
     },
     store: conversationStore,
-    inject: (sessionId: SessionId, actions: BoundActions<typeof conversationStore>): ConversationSessionHeaderInjected => ({
+    inject: (): ConversationSessionHeaderInjected => ({
       hooks: { conversationViews },
       open: (id) => { sessions.open(id) },
-      selectView: (view) => {
-        activateView(sessionId, view)
-        actions.setView(view)
-      },
     }),
   }, ConversationSessionHeader)
 
@@ -273,12 +244,8 @@ export function apply(ctx: Context): void {
     locale: NS,
     children: {
       'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
-      'conversation.input.overlay': { kind: 'list', scope: 'session' },
-      'conversation.input.left': { kind: 'list', scope: 'session' },
       'conversation.input.plan': { kind: 'single', scope: 'session' },
-      'conversation.input.right': { kind: 'list', scope: 'session' },
       'conversation.input.model': { kind: 'single', scope: 'session' },
-      'conversation.composer.dock': { kind: 'list', scope: 'session' },
     },
     inject: (sessionId: SessionId | undefined): ComposerBarInjected => {
       if (sessionId === undefined) {

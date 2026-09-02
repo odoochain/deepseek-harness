@@ -1,15 +1,15 @@
 /**
  * Deterministic HTTP provider for the web-fetch snapshot scenario: a small
  * HTML page (headings, named entities, a GFM table, nested formatting) on a
- * OS-assigned loopback port behind the real address-pinned transport. Recording
- * and replay therefore exercise fetch and markdown rendering without external
- * network while retaining the recorded request URL.
+ * fixed loopback port behind the real address-pinned transport. Recording and
+ * replay therefore exercise fetch and markdown rendering without
+ * external network. The port is fixed because the fetched URL is recorded.
  */
+import { createServer } from 'node:http'
 import { HttpFetchProvider } from '@deepseek-ai/dsh-web-fetch-http'
-import { applyLoopbackServerEffect } from '../loopback-fixture-server.mjs'
 
-/** Model-visible URL retained by the recorded session. */
-const RECORDED_URL = 'http://public.test:43117/menu.html'
+/** Fixed loopback port the scenario prompt points `web_fetch` at. */
+const PORT = 43117
 
 const PAGE = `<!doctype html>
 <html><head><title>Menu</title><style>.x{color:red}</style><script>ignored()</script></head>
@@ -40,52 +40,36 @@ const LIMITS = {
  * Register the deterministic provider and start its loopback server.
  * @param ctx - Cordis context; the effect disposes the server with the fiber.
  */
-export async function apply(ctx) {
-  const readiness = Promise.withResolvers()
-  let transportUrl
-  let startupError
+export function apply(ctx) {
+  const server = createServer((req, res) => {
+    if (req.url === '/menu.html') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+      res.end(PAGE)
+      return
+    }
+    res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+    res.end('not found')
+  })
+  const listening = new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(PORT, '127.0.0.1', () => resolve(undefined))
+  })
+  void listening.catch(() => undefined)
+  // The fixture must never hold the process open past protocol shutdown.
+  server.unref()
 
   const resolveAddresses = async (hostname) => {
+    await listening
     if (hostname !== 'public.test') throw new Error(`unexpected snapshot hostname: ${hostname}`)
     return [{ address: '127.0.0.1', family: 4 }]
   }
 
-  const provider = new HttpFetchProvider(LIMITS, resolveAddresses)
-  const unregister = ctx.web.registerFetchProvider({
-    id: provider.id,
-    available: () => provider.available(),
-    fetch: async (request, signal) => {
-      if (request.url !== RECORDED_URL) throw new Error(`unexpected snapshot URL: ${request.url}`)
-      await readiness.promise
-      if (startupError !== undefined) throw startupError
-      const result = await provider.fetch({ url: transportUrl.toString() }, signal)
-      return { ...result, url: RECORDED_URL }
-    },
-  })
-  try {
-    await applyLoopbackServerEffect(ctx, {
-      label: 'web-fetch-fixture-server',
-      requestListener: (req, res) => {
-        if (req.url === '/menu.html') {
-          res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-          res.end(PAGE)
-          return
-        }
-        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
-        res.end('not found')
-      },
-      onListening: (address) => {
-        transportUrl = new URL(RECORDED_URL)
-        transportUrl.port = String(address.port)
-        readiness.resolve(undefined)
-      },
-      onCleanup: () => {
-        unregister()
-      },
+  ctx.effect(() => async () => {
+    await new Promise((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve(undefined))
+      // Stop accepting first so a connection cannot arrive after the forced close.
+      server.closeAllConnections()
     })
-  } catch (cause) {
-    startupError = cause
-    readiness.resolve(undefined)
-    throw cause
-  }
+  }, 'web-fetch-fixture-server')
+  ctx.web.registerFetchProvider(new HttpFetchProvider(LIMITS, resolveAddresses))
 }

@@ -72,6 +72,7 @@ LEGACY_CUSTOM_DISABLED_ROWS = (
     "tool-subagent-control",
     "tool-subagent-list-agents",
     "tool-subagent-fork",
+    "tool-subagent-report",
     "tool-todo",
     "tool-web",
 )

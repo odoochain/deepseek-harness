@@ -15,8 +15,7 @@ export type {} from './conversation-nodes/turn-tail.ts'
 
 export type {
   AssistantBlock, AssistantMessageNode, AssistantProvenanceView, AssistantRequestConfig,
-  AssistantTiming, ChatLocationNodeIndex, ChatNodeProcessSource, ChatNodeSource, ChatNodeStore,
-  ChatSnapshot, ChatTurnNavigationIndex, ChatTurnProcessPresentation,
+  AssistantTiming, ChatLocationNodeIndex, ChatNodeStore, ChatSnapshot, ChatTurnNavigationIndex,
   CommandNode, CompactionSummaryNode, ContextMessageNode, ConversationNode,
   LegacyConversationSlice, ModelRetryNode, PartialAssistant, RunningToolCall,
   SteeringMessageNode, ToolCallBlock, ToolResultNode, TurnErrorNode, TurnMaxTokensNode,
@@ -38,7 +37,7 @@ export type {
   TurnProcessOwnerProps, TurnTailOwnerProps, UseChat, UseChatNodeTurnData,
 } from './contract/slots.ts'
 export type {
-  TurnProcessSpec,
+  TurnProcessGeneration, TurnProcessSignature, TurnProcessSpec,
 } from './contract/turn-process.ts'
 export type { ChatKey } from './locale.ts'
 export type { ConversationContext, ConversationContextOriginKind } from './model/conversation-context.ts'

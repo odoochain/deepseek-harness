@@ -1,13 +1,7 @@
 /** One-shot session-lineage and event-relationship tracing helpers. */
 
 import { foldSurface, isSurfaceEvent, snapshotSessionEvent } from '@deepseek-ai/dsh-session'
-import type {
-  SessionEvent,
-  SessionId,
-  SessionSeq,
-  SurfaceEvent,
-  SurfaceEventType,
-} from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionId, SurfaceEvent, SurfaceEventType } from '@deepseek-ai/dsh-session'
 import { SessionQueryError } from './config.ts'
 import type {
   SessionEventRecord,
@@ -19,9 +13,9 @@ import type {
 
 interface EventLogAnalysis {
   records: SessionEventRecord[]
-  replacedBy: Map<SessionSeq, SessionSeq>
-  replacedEventSeqs: Map<SessionSeq, SessionSeq[]>
-  currentSeqs: SessionSeq[]
+  replacedBy: Map<number, number>
+  replacedEventSeqs: Map<number, number[]>
+  currentSeqs: number[]
 }
 
 /**
@@ -71,7 +65,7 @@ export function currentSurfaceEvents(
 export function traceEvent(
   sessionId: SessionId,
   events: readonly SessionEvent[],
-  seq: SessionSeq,
+  seq: number,
 ): SessionEventTrace {
   const target = events[seq]
   if (target === undefined || target.seq !== seq) {
@@ -83,14 +77,14 @@ export function traceEvent(
 
   const analysis = analyzeEventLog(sessionId, events)
 
-  const replacementChain: SessionSeq[] = []
+  const replacementChain: number[] = []
   let replacement = analysis.replacedBy.get(seq)
   while (replacement !== undefined) {
     replacementChain.push(replacement)
     replacement = analysis.replacedBy.get(replacement)
   }
 
-  const derivedEventSeqs: SessionSeq[] = []
+  const derivedEventSeqs: number[] = []
   for (const event of events) {
     if (event.seq <= seq) continue
     if (eventSources(event).includes(seq)) derivedEventSeqs.push(event.seq)
@@ -194,8 +188,8 @@ function analyzeEventLog(
     )
   }
   const current = new Set(folded.nodes)
-  const replacedBy = new Map<SessionSeq, SessionSeq>()
-  const replacedEventSeqs = new Map<SessionSeq, SessionSeq[]>()
+  const replacedBy = new Map<number, number>()
+  const replacedEventSeqs = new Map<number, number[]>()
   for (const replacement of folded.replacements) {
     const removed = replacement.shadowedSeqs
     replacedEventSeqs.set(replacement.seq, removed)
@@ -219,7 +213,7 @@ function analyzeEventLog(
   }
 }
 
-function eventSources(event: SessionEvent): readonly SessionSeq[] {
+function eventSources(event: SessionEvent): readonly number[] {
   return (event as SessionEvent<SurfaceEventType>).sourceEventSeqs ?? []
 }
 

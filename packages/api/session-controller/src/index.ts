@@ -4,10 +4,9 @@ import { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import { canOpenNativePath, openNativePath } from '@deepseek-ai/dsh-native-command'
-import type { SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
-import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
+import { Remote, TypertRemoteFailure, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import {
   ApiSessionAgentController,
   inspectApiSession,
@@ -192,14 +191,10 @@ export class SessionController extends TypertRemoteService {
   inspect(
     sessionId: SessionId,
     signal?: AbortSignal,
-  ): Promise<SessionInspection> {
+  ): Promise<{ meta: SessionHeader; events: SessionEvent[] }> {
     const attached = this.ctx.sessions.get(sessionId)
     if (attached !== undefined) {
-      return Promise.resolve({
-        meta: attached.header,
-        inheritedEventCount: attached.inheritedEventCount,
-        events: attached.snapshotEvents(),
-      })
+      return Promise.resolve({ meta: attached.header, events: [...attached.events] })
     }
     return inspectApiSession(this.ctx, sessionId, signal)
   }
@@ -269,7 +264,7 @@ export class SessionController extends TypertRemoteService {
    * @param request - path after best-effort Session workspace resolution.
    * @param signal - caller lifetime; abort terminates the native command.
    * @returns confirmation after the native opener accepts the path.
-   * @throws RemoteError when the request is invalid, cancelled, or the opener fails.
+   * @throws TypertRemoteFailure when the request is invalid, cancelled, or the opener fails.
    */
   @Remote('openWorkspacePath')
   async openWorkspacePath(
@@ -277,23 +272,27 @@ export class SessionController extends TypertRemoteService {
     signal: AbortSignal,
   ): Promise<SessionOpenWorkspacePathValue> {
     if (request.path.length === 0) {
-      throw new RemoteError(
-        'gateway/bad-request',
-        'session.openWorkspacePath requires a non-empty path',
-        {},
-      )
+      throw new TypertRemoteFailure({
+        code: 'bad-request',
+        message: 'session.openWorkspacePath requires a non-empty path',
+        details: {},
+      })
     }
     signal.throwIfAborted()
     try {
       await this.openPath(request.path, signal)
       return { opened: true }
     } catch (error: unknown) {
-      if (signal.aborted) throw new RemoteError('gateway/cancelled', 'path open was aborted', {})
-      throw new RemoteError(
-        'gateway/internal',
-        `path open failed: ${error instanceof Error ? error.message : String(error)}`,
-        {},
-      )
+      if (signal.aborted) {
+        throw new TypertRemoteFailure({
+          code: 'cancelled', message: 'path open was aborted', details: {},
+        })
+      }
+      throw new TypertRemoteFailure({
+        code: 'internal',
+        message: `path open failed: ${error instanceof Error ? error.message : String(error)}`,
+        details: {},
+      })
     }
   }
 

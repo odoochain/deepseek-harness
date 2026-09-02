@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { SessionFace } from '@deepseek-ai/dsh-api-session-controller/client'
-import { RemoteError, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
+import { SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import { HistoricalImageCache } from '../src/client/conversation/historical-images.ts'
 
 describe('HistoricalImageCache', () => {
@@ -68,7 +68,7 @@ describe('HistoricalImageCache', () => {
         session: {
           readAttachment: () => Promise.resolve({
             ok: false,
-            error: new RemoteError('session/attachment-invalid', 'missing', { reason: 'missing' }),
+            error: { code: 'attachment-error', message: 'missing', details: {} },
           } as never),
         },
       })
@@ -78,7 +78,7 @@ describe('HistoricalImageCache', () => {
       } as const
 
       expect(cache.seed(sessionId, attachment, 'blob:seeded')).toBe(true)
-      await expect(cache.resolve(sessionId, attachment)).rejects.toThrow('attachment-invalid: missing')
+      await expect(cache.resolve(sessionId, attachment)).rejects.toThrow('attachment-error: missing')
       expect(cache.peek(sessionId, attachment)).toBeUndefined()
       expect(revoked).toHaveBeenCalledWith('blob:seeded')
       await runtime.dispose()

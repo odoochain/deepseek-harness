@@ -10,8 +10,9 @@ import { afterEach, expect, it } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { canonicalPath, writableRoots } from '@deepseek-ai/dsh-sandbox'
 import { SessionId } from '@deepseek-ai/dsh-session'
-// These imports carry the tools/sandboxPolicy/approval Context merges.
-import { RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+// Empty type imports carry the tools/sandboxPolicy/approval Context merges.
+import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-permission-presets'
@@ -100,7 +101,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       ],
     }
   `)
-  await ctx.settings.update('llm-deepseek', {
+  await ctx.settings.update(settingsNamespace('llm-deepseek'), {
     retryPolicy: { mode: 'always', maxRetries: 5 },
   })
   expect(ctx.llm.providerRetryPolicy('deepseek-official')).toMatchInlineSnapshot(`
@@ -111,7 +112,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       "mode": "always",
     }
   `)
-  await ctx.settings.update('llm-pi-ai', {
+  await ctx.settings.update(settingsNamespace('llm-pi-ai'), {
     providers: {
       openai: {},
       anthropic: { retryPolicy: { mode: 'always' } },
@@ -188,24 +189,6 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
     })
   } finally {
     await commandHandle.dispose()
-  }
-}, 120_000)
-
-it('ships PTC with run_code but without the general workflow SDK binding', async () => {
-  scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
-  const ctx = scaffold.ctx
-  const handle = await ctx.agents.create({
-    sessionId: SessionId('shipped-ptc-composition'),
-    setup: agentCtx => ctx.agentPresets.mount(agentCtx, 'ptc').then(() => undefined),
-  })
-  try {
-    const assembly = await ctx.systemPrompt.assemble({ scope: handle.agent })
-    expect(assembly.tools.map(tool => tool.name)).toEqual([RUN_CODE_NAME])
-    const sdk = assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? ''
-    expect(sdk).toContain('  ralph: {')
-    expect(sdk).not.toContain('  workflow: {')
-  } finally {
-    await handle.dispose()
   }
 }, 120_000)
 

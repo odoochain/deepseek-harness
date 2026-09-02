@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import LlmRuntime, { createUserMessage, ToolCallId, LlmAdapter  } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
@@ -22,7 +21,6 @@ async function harness(adapter: LlmAdapter): Promise<Harness> {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   const agentsFiber = await ctx.plugin(AgentRegistry)
@@ -123,7 +121,6 @@ describe('AgentLoop initiator scope', () => {
     const adapter = new OverlapAdapter(ctx)
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
@@ -334,7 +331,7 @@ describe('AgentLoop initiator scope', () => {
     }])
     const schema = adapter.requests[0]?.tools?.find(tool => tool.name === 'capability-request')
     expect(JSON.stringify(schema?.parameters)).not.toMatch(/session|harness/i)
-    const call = handle.agent.session.snapshotEvents().find(event => event.type === 'tool/call')
+    const call = handle.agent.session.events.find(event => event.type === 'tool/call')
     expect(call?.type === 'tool/call' ? call.data.arguments : undefined)
       .toBe(JSON.stringify({ path: '/v1/capability' }))
     expect(captured).toBe(handle.agent)
@@ -383,7 +380,6 @@ describe('AgentLoop initiator scope', () => {
     const adapter = new ReloadAdapter()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)

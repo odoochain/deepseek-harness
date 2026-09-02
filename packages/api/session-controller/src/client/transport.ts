@@ -1,11 +1,12 @@
 /** Session-specific adapters for Gateway-owned Remote stream lifecycles. */
 
 import type {} from '@deepseek-ai/dsh-api-session-controller/remote'
-import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import type { RemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
 import {
   RemoteJournalStream,
   RemoteSnapshotStream,
   RemoteStreamCarrierError,
+  RemoteStreamError,
   type ClientRemote,
   type RemoteJournalChange,
   type RemoteJournalFrame,
@@ -24,7 +25,6 @@ import {
   historyRecordLastSeq,
 } from './sessions/history-records.ts'
 import type { SessionEventLikeEntry, SessionLiveEventEntry } from './contract/events.ts'
-import type { SessionRemotes } from './sessions/remotes.ts'
 
 export {
   SESSION_SEARCH_RESULT_LIMIT,
@@ -61,11 +61,7 @@ function toSessionJournalChange(
       return { ...change, entries: historyEntries(change.entries) }
     case 'append': {
       if (change.entry.type !== 'event') {
-        throw new RemoteError(
-          'gateway/internal',
-          'session live stream emitted a packed history record',
-          {},
-        )
+        throw new Error('session live stream emitted a packed history record')
       }
       return {
         type: 'append',
@@ -83,6 +79,8 @@ export type SessionControlStream = RemoteSnapshotStream<
   SessionControlBaselineFrame,
   SessionControlDeltaFrame
 >
+
+type SessionStreamRemote = Pick<ClientRemote, '$stream' | 'session'>
 
 /** Domain sinks used by the Host-wide Session control stream. */
 export interface SessionControlStreamOptions {
@@ -111,7 +109,7 @@ export interface SessionEventStreamOptions {
  * @returns an unstarted stream owned by the Client Session runtime.
  */
 export function createSessionControlStream(
-  remote: SessionRemotes,
+  remote: SessionStreamRemote,
   options: SessionControlStreamOptions,
 ): SessionControlStream {
   const stream = remote.$stream<SessionControlFrame>({
@@ -144,7 +142,7 @@ export class SessionEventStream extends RemoteJournalStream<
    * @param options - Session event-window destinations.
    */
   constructor(
-    private readonly remote: SessionRemotes,
+    private readonly remote: SessionStreamRemote,
     private readonly address: SessionAddress,
     options: SessionEventStreamOptions,
   ) {
@@ -200,7 +198,13 @@ export class SessionEventStream extends RemoteJournalStream<
       { address: this.address, throughSeq, ...request },
       signal,
     )
-    if (!result.ok) throw result.error
+    if (!result.ok) {
+      throw new RemoteStreamError(
+        result.error.code,
+        result.error.message,
+        result.error.details,
+      )
+    }
     return result.value
   }
 
@@ -210,4 +214,14 @@ export class SessionEventStream extends RemoteJournalStream<
   ): ClientSessionPageRequest {
     return request.maxMessages === undefined ? {} : { maxMessages: request.maxMessages }
   }
+}
+
+/**
+ * Recover a Host Session failure from a Remote stream terminal error.
+ * @param error - value thrown while opening or consuming a Session stream.
+ * @returns the Host failure, or `undefined` for carrier and local failures.
+ */
+export function sessionStreamFailure(error: unknown): RemoteFailure | undefined {
+  if (!(error instanceof RemoteStreamError)) return undefined
+  return { code: error.code, message: error.message, details: error.details }
 }

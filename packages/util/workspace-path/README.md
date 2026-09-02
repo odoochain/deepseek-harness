@@ -35,5 +35,3 @@ Browser-safe path helpers shared by Workspace-facing client and controller packa
 None.
 
 </details>
-
-**Runtime invariant:** No companion is published. This utility owns no mutable runtime relationship.

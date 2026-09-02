@@ -7,9 +7,10 @@ import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type {} from '@deepseek-ai/dsh-tools/types'
 import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
-import type { AssistantChatData, ChatNode, FinalAssistantChatData } from '../contract/chat-nodes.ts'
+import type { AssistantChatData, FinalAssistantChatData } from '../contract/chat-nodes.ts'
 import {
-  isSubagentDelegationTool, sameTurnProcessSpec, type TurnProcessSpec,
+  decodeTurnProcess, encodeTurnProcess, isSubagentDelegationTool,
+  type TurnProcessSignature, type TurnProcessSpec,
 } from '../contract/turn-process.ts'
 import { CHAT_SYNTHETIC_SEQ_OFFSETS, chatNode } from './common.ts'
 import { toAssistantBlocks } from './event-projection.ts'
@@ -23,8 +24,8 @@ declare module '../contract/chat-nodes.ts' {
 
 declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface ConversationTurnDataMap {
-    /** Process range and finalized answer boundary for this Turn. */
-    'turn-process': TurnProcessSpec
+    /** Encoded process range and finalized answer boundary for this Turn. */
+    'turn-process': TurnProcessSignature
   }
 }
 
@@ -33,8 +34,6 @@ interface TurnProcessState {
   readonly assistantStartByStep: ReadonlyMap<number, number>
   readonly messageCountByStep: ReadonlyMap<number, number>
   readonly otherStartSeq?: number
-  readonly controlAnchorSeq?: number
-  readonly messageCount: number
   readonly toolCallCount: number
   readonly subagentCount: number
 }
@@ -110,7 +109,6 @@ function fallbackState(context: ConversationNodeContext<TurnProcessState>): Turn
     turn,
     assistantStartByStep: new Map(),
     messageCountByStep: new Map(),
-    messageCount: 0,
     toolCallCount: 0,
     subagentCount: 0,
   }
@@ -132,12 +130,15 @@ function latestAnswer(turn: TurnLocation): Readonly<FinalAssistantChatData> | nu
 }
 
 function processSpec(state: TurnProcessState, turn: TurnLocation): TurnProcessSpec | null {
-  const controlAnchorSeq = state.controlAnchorSeq
-  if (controlAnchorSeq === undefined) return null
+  const controlAnchorSeq = Math.min(
+    state.otherStartSeq ?? Number.POSITIVE_INFINITY,
+    ...state.assistantStartByStep.values(),
+  )
+  if (!Number.isFinite(controlAnchorSeq)) return null
   const answer = latestAnswer(turn)
   const counts = {
     messageCount: answer === null
-      ? state.messageCount
+      ? [...state.messageCountByStep.values()].reduce((total, count) => total + count, 0)
       : [...state.messageCountByStep]
         .filter(([step]) => step < answer.step)
         .reduce((total, [, count]) => total + count, 0),
@@ -184,7 +185,7 @@ function updateProcessState(state: TurnProcessState, event: ConversationEvent): 
     && hasAssistantReplyContent(toAssistantBlocks(event.data.message.content))) {
     const messageCountByStep = new Map(current.messageCountByStep)
     messageCountByStep.set(event.data.step, (messageCountByStep.get(event.data.step) ?? 0) + 1)
-    current = { ...current, messageCountByStep, messageCount: current.messageCount + 1 }
+    current = { ...current, messageCountByStep }
   }
   if (event.type === 'tool/call') {
     const subagent = isSubagentDelegationTool(event.data.name)
@@ -197,22 +198,12 @@ function updateProcessState(state: TurnProcessState, event: ConversationEvent): 
   const evidence = processEvidence(event)
   if (evidence === undefined) return current
   if (evidence.kind === 'other') {
-    return current.otherStartSeq === undefined
-      ? {
-        ...current,
-        otherStartSeq: evidence.seq,
-        controlAnchorSeq: Math.min(current.controlAnchorSeq ?? Number.POSITIVE_INFINITY, evidence.seq),
-      }
-      : current
+    return current.otherStartSeq === undefined ? { ...current, otherStartSeq: evidence.seq } : current
   }
   if (current.assistantStartByStep.has(evidence.step)) return current
   const assistantStartByStep = new Map(current.assistantStartByStep)
   assistantStartByStep.set(evidence.step, evidence.seq)
-  return {
-    ...current,
-    assistantStartByStep,
-    controlAnchorSeq: Math.min(current.controlAnchorSeq ?? Number.POSITIVE_INFINITY, evidence.seq),
-  }
+  return { ...current, assistantStartByStep }
 }
 
 /** Turn-scoped process range and answer-boundary Definition. */
@@ -242,7 +233,6 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
       turn: match.event.data.turn,
       assistantStartByStep: new Map(),
       messageCountByStep: new Map(),
-      messageCount: 0,
       toolCallCount: 0,
       subagentCount: 0,
     }
@@ -256,53 +246,25 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
     }
     return 'immediate'
   },
-  buildLocationData: (context, scope, previous) => {
+  buildLocationData: (context, scope) => {
     if (scope !== 'turn') return null
     const state = context.state ?? fallbackState(context)
     if (state === undefined) return null
     const turn = turnLocation(context)
     if (turn === undefined) return null
-    const current = context.current.get('chat') as ChatNode | null | undefined
-    const latestStep = turn.steps.at(-1)
-    if (previous?.kind === 'turn'
-      && previous.key === 'turn-process'
-      && current?.kind === 'turn-process'
-      && current.data.answerAnchorSeq === null
-      && current.data.controlAnchorSeq === state.controlAnchorSeq
-      && current.data.messageCount === state.messageCount
-      && current.data.toolCallCount === state.toolCallCount
-      && current.data.subagentCount === state.subagentCount
-      && turn.status !== 'closed'
-      && latestStep?.status !== 'closed') return previous
     const spec = processSpec(state, turn)
-    if (spec === null) return null
-    if (previous?.kind === 'turn'
-      && previous.turn === spec.turn
-      && previous.key === 'turn-process'
-      && sameTurnProcessSpec(previous.value, spec)) return previous
-    return {
+    return spec === null ? null : {
       kind: 'turn',
       turn: turn.turn,
       key: 'turn-process',
-      value: spec,
+      value: encodeTurnProcess(spec),
     }
   },
   buildViewNode: (context) => {
     const turn = turnLocation(context)
-    const data = turn?.data.get('turn-process')
-    if (turn === undefined || data === undefined) return null
-    const current = context.current.get('chat') as ChatNode | null | undefined
-    const state = context.state
-    if (current?.kind === 'turn-process'
-      && state !== undefined
-      && current.data.answerAnchorSeq === null
-      && current.data.controlAnchorSeq === state.controlAnchorSeq
-      && current.data.messageCount === state.messageCount
-      && current.data.toolCallCount === state.toolCallCount
-      && current.data.subagentCount === state.subagentCount
-      && turn.status !== 'closed'
-      && turn.steps.at(-1)?.status !== 'closed'
-      && current.location === (context.start?.location ?? context.matches[0]?.location)) return current
+    const signature = turn?.data.get('turn-process')
+    if (turn === undefined || signature === undefined) return null
+    const data = decodeTurnProcess(signature)
     return chatNode(
       context,
       'turn-process',

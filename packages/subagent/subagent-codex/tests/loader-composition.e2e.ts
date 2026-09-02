@@ -2,17 +2,17 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
-
-const PRODUCTION_PROFILE_PROCESS_TIMEOUT_MS = 60_000
-const PRODUCTION_PROFILE_TEST_TIMEOUT_MS = PRODUCTION_PROFILE_PROCESS_TIMEOUT_MS + 15_000
+import {
+  LOADER_SMOKE_TEST_TIMEOUT_MS,
+  runLoaderSmoke,
+} from '@deepseek-ai/dsh-loader-smoke'
 
 const fixtureDir = fileURLToPath(new URL(
   './fixtures/loader/',
   import.meta.url,
 ))
 const driver = join(fixtureDir, 'driver.ts')
-const configPath = join(fixtureDir, 'codex.patch.yml')
+const configPath = join(fixtureDir, 'cordis.yml')
 const packageDir = fileURLToPath(new URL('..', import.meta.url))
 const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as {
   dsh?: { bundle?: { patch?: string } }
@@ -32,7 +32,6 @@ describe('Codex provider public Loader composition', () => {
       configPath,
       binArgs: [configPath, bundlePatchPath],
       tsconfigPath: repoTsconfig,
-      processTimeoutMs: PRODUCTION_PROFILE_PROCESS_TIMEOUT_MS,
       env: {
         // Loading the optional package must not probe or start a Codex binary.
         PATH: '',
@@ -41,7 +40,7 @@ describe('Codex provider public Loader composition', () => {
 
     expect(stderr).toBe('')
     expect(JSON.parse(stdout)).toEqual({
-      providers: ['codex', 'codex-primary', 'codex-secondary'],
+      providers: ['codex-primary', 'codex-secondary', 'codex'],
       providerDetails: [
         {
           name: 'codex',
@@ -97,5 +96,5 @@ describe('Codex provider public Loader composition', () => {
       jobTools: ['job_kill', 'job_list', 'job_output'],
       starts: 0,
     })
-  }, PRODUCTION_PROFILE_TEST_TIMEOUT_MS)
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 })

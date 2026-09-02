@@ -283,18 +283,22 @@ describe('model discovery registry', () => {
       { baseURL: 'https://gateway.example/v1' },
       signal,
     )).rejects.toMatchObject({
-      code: 'llm/model-discovery-rejected',
-      message: 'endpoint offline',
-      details: { settingsNs: 'llm-example', baseURL: 'https://gateway.example/v1' },
+      failure: {
+        code: 'model-discovery-failed',
+        message: 'endpoint offline',
+        details: { settingsNs: 'llm-example', baseURL: 'https://gateway.example/v1' },
+      },
     })
     await expect(ctx.llm.remoteDiscoverModels(
       'llm-example',
       { provider: 'known-route' },
       signal,
     )).rejects.toMatchObject({
-      code: 'llm/model-discovery-rejected',
-      message: 'provider refused',
-      details: { settingsNs: 'llm-example' },
+      failure: {
+        code: 'model-discovery-failed',
+        message: 'provider refused',
+        details: { settingsNs: 'llm-example' },
+      },
     })
   })
 
